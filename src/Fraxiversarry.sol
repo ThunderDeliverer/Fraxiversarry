@@ -36,11 +36,19 @@ contract Fraxiversarry is
     mapping(uint256 tokenId => mapping(address erc20 => uint256 balance)) public erc20Balances;
     mapping(uint256 tokenId => mapping(uint256 index => uint256 underlyingTokenId)) public underlyingTokenIds;
     mapping(uint256 tokenId => bool nonTransferable) public isNonTransferrable;
+    mapping(uint256 tokenId => TokenType tokenType) public tokenTypes;
 
     uint256 private _nextTokenId;
     uint256 private _nextPremiumTokenId;
     uint256 public totalNumberOfSupportedErc20s;
     uint256 public mintingLimit;
+
+    enum TokenType {
+        NONEXISTENT, // 0 - Token does not exist
+        BASE, // 1 - NFTs that are minted using ERC20 tokens
+        FUSED, // 2 - NFTs that are created by combining multiple base NFTs
+        SOULBOUND // 3 - NFTs that are non-transferable and tied to a specific user
+    }
 
     string private premiumTokenUri;
 
@@ -77,6 +85,9 @@ contract Fraxiversarry is
         underlyingAssets[tokenId][numberOfTokenUnderlyingAssets[tokenId]] = erc20Contract;
         numberOfTokenUnderlyingAssets[tokenId] += 1;
 
+        // Set the token type to BASE
+        tokenTypes[tokenId] = TokenType.BASE;
+
         _safeMint(msg.sender, tokenId);
         _setTokenURI(tokenId, baseAssetTokenUris[erc20Contract]);
 
@@ -90,6 +101,7 @@ contract Fraxiversarry is
         _setTokenURI(tokenId, tokenUri);
 
         isNonTransferrable[tokenId] = true;
+        tokenTypes[tokenId] = TokenType.SOULBOUND;
 
         _nextPremiumTokenId += 1;
 
@@ -100,6 +112,7 @@ contract Fraxiversarry is
 
     function burn(uint256 tokenId) public override(ERC721Burnable) {
         if (msg.sender != ownerOf(tokenId)) revert OnlyTokenOwnerCanBurnTheToken();
+        if (tokenTypes[tokenId] == TokenType.FUSED) revert UnfuseTokenBeforeBurning();
         // Transfer out the held ERC20 and then burn the NFT
         for (uint256 i; i < numberOfTokenUnderlyingAssets[tokenId]; ) {
             _transferHeldERC20FromToken(underlyingAssets[tokenId][i], tokenId, msg.sender, erc20Balances[tokenId][underlyingAssets[tokenId][i]]);
@@ -110,6 +123,7 @@ contract Fraxiversarry is
         }
         numberOfTokenUnderlyingAssets[tokenId] = 0;
         super.burn(tokenId);
+        tokenTypes[tokenId] = TokenType.NONEXISTENT;
     }
 
     function setBaseAssetTokenUri(address erc20Contract, string memory uri) public onlyOwner {
@@ -202,6 +216,59 @@ contract Fraxiversarry is
         );
     }
 
+    function getUnderlyingBalances(uint256 tokenId) external view
+        returns(address[] memory erc20Contracts, uint256[] memory balances)
+    {
+        if (tokenTypes[tokenId] == TokenType.NONEXISTENT) revert TokenDoesNotExist();
+        if (tokenTypes[tokenId] == TokenType.SOULBOUND) return (new address[](0), new uint256[](0));
+
+        if (tokenTypes[tokenId] == TokenType.BASE) {
+            erc20Contracts = new address[](1);
+            balances = new uint256[](1);
+
+            address erc20Contract = underlyingAssets[tokenId][0];
+            erc20Contracts[0] = erc20Contract;
+            balances[0] = erc20Balances[tokenId][erc20Contract];
+
+            return (erc20Contracts, balances);
+        }
+
+        erc20Contracts = new address[](3);
+        balances = new uint256[](3);
+
+        for (uint256 i; i < 3; ) {
+            uint256 underlyingTokenId = underlyingTokenIds[tokenId][i];
+            address erc20Contract = underlyingAssets[underlyingTokenId][0];
+            erc20Contracts[i] = erc20Contract;
+            balances[i] = erc20Balances[underlyingTokenId][erc20Contract];
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        return (erc20Contracts, balances);
+    }
+
+    function getSupportedErc20s() external view
+        returns (address[] memory erc20Contracts, uint256[] memory mintPricesOut)
+    {
+        erc20Contracts = new address[](totalNumberOfSupportedErc20s);
+        mintPricesOut = new uint256[](totalNumberOfSupportedErc20s);
+
+        for (uint256 i; i < totalNumberOfSupportedErc20s; ) {
+            address erc20Contract = supportedErc20s[i];
+            erc20Contracts[i] = erc20Contract;
+            mintPricesOut[i] = mintPrices[erc20Contract];
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        return (erc20Contracts, mintPricesOut);
+    }
+
     // Implementtion of IERC6454 interface function
     function isTransferable(uint256 tokenId, address from, address to) public view override returns (bool) {
         return !isNonTransferrable[tokenId];
@@ -242,6 +309,18 @@ contract Fraxiversarry is
             ownerOf(tokenId3) != msg.sender
         ) revert OnlyTokenOwnerCanFuseTokens();
 
+        if (
+            tokenTypes[tokenId1] != TokenType.BASE ||
+            tokenTypes[tokenId2] != TokenType.BASE ||
+            tokenTypes[tokenId3] != TokenType.BASE
+        ) revert CanOnlyFuseBaseTokens();
+
+        if (
+            underlyingAssets[tokenId1][0] == underlyingAssets[tokenId2][0] ||
+            underlyingAssets[tokenId1][0] == underlyingAssets[tokenId3][0] ||
+            underlyingAssets[tokenId2][0] == underlyingAssets[tokenId3][0]
+        ) revert SameTokenUnderlyingAssets();
+
         premiumTokenId = _nextPremiumTokenId;
 
         _update(address(this), tokenId1, msg.sender);
@@ -256,6 +335,8 @@ contract Fraxiversarry is
         underlyingTokenIds[premiumTokenId][1] = tokenId2;
         underlyingTokenIds[premiumTokenId][2] = tokenId3;
 
+        tokenTypes[premiumTokenId] = TokenType.FUSED;
+
         _nextPremiumTokenId += 1;
 
         emit TokenFused(msg.sender, tokenId1, tokenId2, tokenId3, premiumTokenId);
@@ -263,12 +344,14 @@ contract Fraxiversarry is
 
     function unfuseTokens(uint256 premiumTokenId) public returns (uint256 tokenId1, uint256 tokenId2, uint256 tokenId3) {
         if (ownerOf(premiumTokenId) != msg.sender) revert OnlyTokenOwnerCanUnfuseTokens();
+        if (tokenTypes[premiumTokenId] != TokenType.FUSED) revert CanOnlyUnfuseFusedTokens();
 
         tokenId1 = underlyingTokenIds[premiumTokenId][0];
         tokenId2 = underlyingTokenIds[premiumTokenId][1];
         tokenId3 = underlyingTokenIds[premiumTokenId][2];
 
         _burn(premiumTokenId);
+        tokenTypes[premiumTokenId] = TokenType.NONEXISTENT;
 
         underlyingTokenIds[premiumTokenId][0] = 0;
         underlyingTokenIds[premiumTokenId][1] = 0;
