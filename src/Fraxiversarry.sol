@@ -1,0 +1,372 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.30;
+
+import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import {ERC721} from "openzeppelin-contracts/contracts/token/ERC721/ERC721.sol";
+import {ERC721Burnable} from "openzeppelin-contracts/contracts/token/ERC721/extensions/ERC721Burnable.sol";
+import {ERC721Enumerable} from "openzeppelin-contracts/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
+import {ERC721Pausable} from "openzeppelin-contracts/contracts/token/ERC721/extensions/ERC721Pausable.sol";
+import {ERC721URIStorage} from "openzeppelin-contracts/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
+import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
+
+import {IFraxiversarryErrors} from "./interfaces/IFraxiversarryErrors.sol";
+import {IFraxiversarryEvents} from "./interfaces/IFraxiversarryEvents.sol";
+import {IERC6454} from "./interfaces/IERC6454.sol";
+import {IERC7590} from "./interfaces/IERC7590.sol";
+import {IERC4906} from "openzeppelin-contracts/contracts/interfaces/IERC4906.sol";
+
+contract Fraxiversarry is 
+    ERC721,
+    ERC721Enumerable,
+    ERC721URIStorage,
+    ERC721Pausable,
+    Ownable,
+    ERC721Burnable,
+    IERC6454,
+    IERC7590,
+    IFraxiversarryErrors,
+    IFraxiversarryEvents
+{
+    mapping(address erc20 => uint256 price) public mintPrices;
+    mapping(address erc20 => string uri) public baseAssetTokenUris;
+    mapping(uint256 index => address erc20) public supportedErc20s;
+    mapping(uint256 tokenId => mapping(uint256 index => address underlyingAsset)) public underlyingAssets;
+    mapping(uint256 tokenId => uint256 numberOfAssets) public numberOfTokenUnderlyingAssets;
+    mapping(uint256 tokenId => uint256 transferOutNonce) public transferOutNonces;
+    mapping(uint256 tokenId => mapping(address erc20 => uint256 balance)) public erc20Balances;
+    mapping(uint256 tokenId => mapping(uint256 index => uint256 underlyingTokenId)) public underlyingTokenIds;
+    mapping(uint256 tokenId => bool nonTransferable) public isNonTransferrable;
+
+    uint256 private _nextTokenId;
+    uint256 private _nextPremiumTokenId;
+    uint256 public totalNumberOfSupportedErc20s;
+    uint256 public mintingLimit;
+
+    string private premiumTokenUri;
+
+    constructor(address initialOwner)
+        ERC721("Fraxiversarry", "FRAX5Y")
+        Ownable(initialOwner)
+    {
+        mintingLimit = 12000;
+        _nextPremiumTokenId = mintingLimit;
+
+        premiumTokenUri = "https://premium.tba.frax/";
+    }
+
+    function _baseURI() internal pure override returns (string memory) {
+        return "https://tba.frax/";
+    }
+
+    function pause() public onlyOwner {
+        _pause();
+    }
+
+    function unpause() public onlyOwner {
+        _unpause();
+    }
+
+    function paidMint(address erc20Contract) public returns (uint256) {
+        if (_nextTokenId >= mintingLimit) revert MintingLimitReached();
+        if (mintPrices[erc20Contract] == 0) revert UnsupportedToken();
+
+        uint256 tokenId = _nextTokenId++;
+        _transferERC20ToToken(erc20Contract, tokenId, msg.sender);
+
+        // Update underlying assets with the asset being used when minting
+        underlyingAssets[tokenId][numberOfTokenUnderlyingAssets[tokenId]] = erc20Contract;
+        numberOfTokenUnderlyingAssets[tokenId] += 1;
+
+        _safeMint(msg.sender, tokenId);
+        _setTokenURI(tokenId, baseAssetTokenUris[erc20Contract]);
+
+        return tokenId;
+    }
+
+    function soulboundMint(address recipient, string memory tokenUri) public onlyOwner returns (uint256){
+        uint256 tokenId = _nextPremiumTokenId;
+
+        _safeMint(recipient, tokenId);
+        _setTokenURI(tokenId, tokenUri);
+
+        isNonTransferrable[tokenId] = true;
+
+        _nextPremiumTokenId += 1;
+
+        emit NewSoulboundToken(recipient, tokenId);
+
+        return tokenId;
+    }
+
+    function burn(uint256 tokenId) public override(ERC721Burnable) {
+        if (msg.sender != ownerOf(tokenId)) revert OnlyTokenOwnerCanBurnTheToken();
+        // Transfer out the held ERC20 and then burn the NFT
+        for (uint256 i; i < numberOfTokenUnderlyingAssets[tokenId]; ) {
+            _transferHeldERC20FromToken(underlyingAssets[tokenId][i], tokenId, msg.sender, erc20Balances[tokenId][underlyingAssets[tokenId][i]]);
+
+            unchecked {
+                ++i;
+            }
+        }
+        numberOfTokenUnderlyingAssets[tokenId] = 0;
+        super.burn(tokenId);
+    }
+
+    function setBaseAssetTokenUri(address erc20Contract, string memory uri) public onlyOwner {
+        baseAssetTokenUris[erc20Contract] = uri;
+    }
+
+    function setPremiumTokenUri(string memory uri) public onlyOwner {
+        premiumTokenUri = uri;
+    }
+
+    function refreshBaseTokenUris(uint256 firstTokenId, uint256 lastTokenId) public onlyOwner {
+        if (lastTokenId < firstTokenId) revert InvalidRange();
+        if (lastTokenId >= _nextTokenId) revert OutOfBounds();
+
+        for (uint256 tokenId = firstTokenId; tokenId <= lastTokenId; ) {
+            address underlyingAsset = underlyingAssets[tokenId][0];
+
+            // Only update if there is an underlying asset (if the token exists)
+            if (underlyingAsset != address(0) && erc20Balances[tokenId][underlyingAsset] > 0) {
+                _setTokenURI(tokenId, baseAssetTokenUris[underlyingAsset]);
+            }
+
+            unchecked {
+                ++tokenId;
+            }
+        }
+
+        emit BatchMetadataUpdate(firstTokenId, lastTokenId);
+    }
+
+    function refreshPremiumTokenUris(uint256 firstTokenId, uint256 lastTokenId) public onlyOwner {
+        if (lastTokenId < firstTokenId) revert InvalidRange();
+        if (firstTokenId < mintingLimit) revert OutOfBounds();
+        if (lastTokenId >= _nextPremiumTokenId) revert OutOfBounds();
+
+        for (uint256 tokenId = firstTokenId; tokenId <= lastTokenId; ) {
+            // Only update if the token has underlying tokens (this ensures that the token exists and that it isn't soulbound)
+            if (underlyingTokenIds[tokenId][0] != 0 || underlyingTokenIds[tokenId][1] != 0) { // This is in case the first underlying token ID is 0
+                _setTokenURI(tokenId, premiumTokenUri);
+            }
+
+            unchecked {
+                ++tokenId;
+            }
+        }
+
+        emit BatchMetadataUpdate(firstTokenId, lastTokenId);
+    }
+
+    function updateBaseAssetMintPrice(address erc20Contract, uint256 mintPrice) public onlyOwner {
+        uint256 previousMintPrice = mintPrices[erc20Contract];
+        if (previousMintPrice == mintPrice) revert AttemptigToSetExistingMintPrice();
+
+        mintPrices[erc20Contract] = mintPrice;
+
+        if (previousMintPrice == 0) {
+            supportedErc20s[totalNumberOfSupportedErc20s] = erc20Contract;
+            totalNumberOfSupportedErc20s += 1;
+        }
+
+        if (mintPrice == 0) {
+            uint256 erc20Index;
+
+            for (uint i; i < totalNumberOfSupportedErc20s; ) {
+                if (supportedErc20s[i] == erc20Contract) {
+                    erc20Index = i;
+                    break;
+                }
+
+                unchecked {
+                    ++i;
+                }
+            }
+
+            supportedErc20s[erc20Index] = supportedErc20s[totalNumberOfSupportedErc20s - 1];
+            totalNumberOfSupportedErc20s -= 1;
+            supportedErc20s[totalNumberOfSupportedErc20s] = address(0);
+        }
+
+        emit MintPriceUpdated(erc20Contract, previousMintPrice, mintPrice);
+    }
+
+    function getUnderlyingTokenIds(uint256 premiumTokenId) external view
+        returns(uint256 tokenId1, uint256 tokenId2, uint256 tokenId3)
+    {
+        return(
+            underlyingTokenIds[premiumTokenId][0],
+            underlyingTokenIds[premiumTokenId][1],
+            underlyingTokenIds[premiumTokenId][2]
+        );
+    }
+
+    // Implementtion of IERC6454 interface function
+    function isTransferable(uint256 tokenId, address from, address to) public view override returns (bool) {
+        return !isNonTransferrable[tokenId];
+    }
+
+    // Implementations of IERC7590 interface functions
+    function balanceOfERC20(address erc20Contract, uint256 tokenId) external view override returns (uint256) {
+        return erc20Balances[tokenId][erc20Contract];
+    }
+
+    function transferHeldERC20FromToken(
+        address erc20Contract,
+        uint256 tokenId,
+        address to,
+        uint256 amount,
+        bytes memory data
+    ) external pure override {
+        revert TokensCanOnlyBeRetrievedByNftBurn();
+    }
+
+    function transferERC20ToToken(
+        address erc20Contract,
+        uint256 tokenId,
+        uint256 amount,
+        bytes memory data
+    ) external pure override {
+        revert TokensCanOnlyBeDepositedByNftMint();
+    }
+
+    function erc20TransferOutNonce(uint256 tokenId) external view override returns (uint256) {
+        return transferOutNonces[tokenId];
+    }
+
+    function fuseTokens(uint256 tokenId1, uint256 tokenId2, uint256 tokenId3) public returns (uint256 premiumTokenId) {
+        if (
+            ownerOf(tokenId1) != msg.sender ||
+            ownerOf(tokenId2) != msg.sender ||
+            ownerOf(tokenId3) != msg.sender
+        ) revert OnlyTokenOwnerCanFuseTokens();
+
+        premiumTokenId = _nextPremiumTokenId;
+
+        _update(address(this), tokenId1, msg.sender);
+        _update(address(this), tokenId2, msg.sender);
+        _update(address(this), tokenId3, msg.sender);
+
+        _safeMint(msg.sender, premiumTokenId);
+        _setTokenURI(premiumTokenId, premiumTokenUri);
+
+        // Assign the fused tokens to the premium token, so they can be extracted when unfusing them
+        underlyingTokenIds[premiumTokenId][0] = tokenId1;
+        underlyingTokenIds[premiumTokenId][1] = tokenId2;
+        underlyingTokenIds[premiumTokenId][2] = tokenId3;
+
+        _nextPremiumTokenId += 1;
+
+        emit TokenFused(msg.sender, tokenId1, tokenId2, tokenId3, premiumTokenId);
+    }
+
+    function unfuseTokens(uint256 premiumTokenId) public returns (uint256 tokenId1, uint256 tokenId2, uint256 tokenId3) {
+        if (ownerOf(premiumTokenId) != msg.sender) revert OnlyTokenOwnerCanUnfuseTokens();
+
+        tokenId1 = underlyingTokenIds[premiumTokenId][0];
+        tokenId2 = underlyingTokenIds[premiumTokenId][1];
+        tokenId3 = underlyingTokenIds[premiumTokenId][2];
+
+        _burn(premiumTokenId);
+
+        underlyingTokenIds[premiumTokenId][0] = 0;
+        underlyingTokenIds[premiumTokenId][1] = 0;
+        underlyingTokenIds[premiumTokenId][2] = 0;
+
+        _update(msg.sender, tokenId1, address(this));
+        _update(msg.sender, tokenId2, address(this));
+        _update(msg.sender, tokenId3, address(this));
+
+        emit TokenUnfused(msg.sender, tokenId1, tokenId2, tokenId3, premiumTokenId);
+    }
+
+    // ********** Internal functions to facilitate the ERC6454 functionality **********
+
+    function _soulboundCheck(uint256 tokenId) internal view {
+        if (isNonTransferrable[tokenId]) revert CannotTransferSoulboundToken();
+    }
+
+    // ********** Internal functions to facilitate the ERC7590 functionality **********
+
+    function _transferHeldERC20FromToken(
+        address erc20Contract,
+        uint256 tokenId,
+        address to,
+        uint256 amount
+    ) internal {
+        IERC20 token = IERC20(erc20Contract);
+
+        if(erc20Balances[tokenId][erc20Contract] < amount) revert InsufficientBalance();
+
+        erc20Balances[tokenId][erc20Contract] -= amount;
+        transferOutNonces[tokenId]++;
+
+        if(!token.transfer(to, amount)) revert TransferFailed();
+
+        emit TransferredERC20(erc20Contract, tokenId, to, amount);
+    }
+
+    function _transferERC20ToToken(
+        address erc20Contract,
+        uint256 tokenId,
+        address from
+    ) internal {
+        IERC20 token = IERC20(erc20Contract);
+        uint256 price = mintPrices[erc20Contract];
+
+        if(token.allowance(from, address(this)) < price) revert InsufficientAllowance();
+        if(token.balanceOf(from) < price) revert InsufficientBalance();
+
+        if(!token.transferFrom(from, address(this), price)) revert TransferFailed();
+
+        erc20Balances[tokenId][erc20Contract] += price;
+
+        emit ReceivedERC20(erc20Contract, tokenId, from, price);
+    }
+
+    // The following functions are overrides required by Solidity.
+
+    function _update(address to, uint256 tokenId, address auth)
+        internal
+        override(ERC721, ERC721Enumerable, ERC721Pausable)
+        returns (address)
+    {
+        _soulboundCheck(tokenId);
+        return super._update(to, tokenId, auth);
+    }
+
+    function _increaseBalance(address account, uint128 value)
+        internal
+        override(ERC721, ERC721Enumerable)
+    {
+        super._increaseBalance(account, value);
+    }
+
+    function _setTokenURI(uint256 tokenId, string memory _tokenURI) internal override {
+        super._setTokenURI(tokenId, _tokenURI);
+        emit MetadataUpdate(tokenId);
+    }
+
+    function tokenURI(uint256 tokenId)
+        public
+        view
+        override(ERC721, ERC721URIStorage)
+        returns (string memory)
+    {
+        return super.tokenURI(tokenId);
+    }
+
+    function supportsInterface(bytes4 interfaceId)
+        public
+        view
+        override(ERC721, ERC721Enumerable, ERC721URIStorage)
+        returns (bool)
+    {
+        return
+            super.supportsInterface(interfaceId) ||
+            interfaceId == type(IERC7590).interfaceId ||
+            interfaceId == type(IERC6454).interfaceId ||
+            interfaceId == type(IERC4906).interfaceId;
+    }
+}
