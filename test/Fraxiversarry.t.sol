@@ -748,20 +748,19 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     function testPauseAndUnpause() public {
         assertFalse(fraxiversarry.paused());
 
-        // Owner can pause
+        // Pause as owner
         vm.prank(owner);
         fraxiversarry.pause();
         assertTrue(fraxiversarry.paused());
 
-        // Second pause should revert due to whenNotPaused
-        vm.prank(owner);
-        vm.expectRevert();
-        fraxiversarry.pause();
-
-        // Owner can unpause
+        // Unpause as owner
         vm.prank(owner);
         fraxiversarry.unpause();
         assertFalse(fraxiversarry.paused());
+
+        // After unpause, mint works again
+        uint256 tokenId = _mintBaseWithWfrax(alice);
+        assertEq(fraxiversarry.ownerOf(tokenId), alice);
     }
 
     function testTransferWhilePausedReverts() public {
@@ -771,7 +770,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         fraxiversarry.pause();
 
         vm.prank(alice);
-        vm.expectRevert(); // Pausable.EnforcedPause in OZ 5
+        vm.expectRevert(bytes4(keccak256("EnforcedPause()")));
         fraxiversarry.transferFrom(alice, bob, tokenId);
     }
 
@@ -1030,5 +1029,130 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
             }
         }
         assertTrue(found, "NewSoulboundToken event not found");
+    }
+
+    function testPauseRevertsWhenAlreadyPaused() public {
+        // First pause succeeds
+        vm.prank(owner);
+        fraxiversarry.pause();
+        assertTrue(fraxiversarry.paused());
+
+        // Second pause hits OZ's EnforcedPause()
+        vm.prank(owner);
+        vm.expectRevert(bytes4(keccak256("EnforcedPause()")));
+        fraxiversarry.pause();
+    }
+
+    function testUnpauseRevertsWhenNotPaused() public {
+        assertFalse(fraxiversarry.paused());
+
+        vm.prank(owner);
+        vm.expectRevert(bytes4(keccak256("ExpectedPause()")));
+        fraxiversarry.unpause();
+    }
+
+    function testRefreshPremiumTokenUrisWhenFirstUnderlyingIdZeroButSecondNonZero() public {
+        // 1. Create a proper fused token
+        (uint256 t1, uint256 t2, uint256 t3) = _mintThreeDifferentBases(alice);
+
+        vm.prank(alice);
+        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3);
+
+        // Sanity: normal state
+        (uint256 u1, uint256 u2, uint256 u3) = fraxiversarry.getUnderlyingTokenIds(premiumId);
+        assertEq(u1, t1);
+        assertEq(u2, t2);
+        assertEq(u3, t3);
+
+        // 2. Force underlyingTokenIds[premiumId][0] = 0 while keeping [1] == t2
+        uint256 slot0 = _stdStore
+            .target(address(fraxiversarry))
+            .sig("underlyingTokenIds(uint256,uint256)")
+            .with_key(premiumId)
+            .with_key(uint256(0))
+            .find();
+
+        vm.store(address(fraxiversarry), bytes32(slot0), bytes32(uint256(0)));
+
+        // Verify our hacked state: first = 0, second != 0
+        (u1, u2, u3) = fraxiversarry.getUnderlyingTokenIds(premiumId);
+        // getUnderlyingTokenIds returns directly from storage, so u1 should now be 0
+        assertEq(u1, 0);
+        assertEq(u2, t2);
+        assertEq(u3, t3);
+
+        // 3. Change global premium URI
+        vm.prank(owner);
+        fraxiversarry.setPremiumTokenUri("https://premium.tba.fraxiversarry/hacked.json");
+
+        // 4. Call refreshPremiumTokenUris on just this token
+        vm.prank(owner);
+        fraxiversarry.refreshPremiumTokenUris(premiumId, premiumId);
+
+        // The URI should still update even though index 0 is 0 and index 1 is not.
+        assertEq(
+            fraxiversarry.tokenURI(premiumId),
+            "https://premium.tba.fraxiversarry/hacked.json"
+        );
+    }
+
+    function testUpdateBaseAssetMintPriceRemovalHitsLoopBreak() public {
+        // Start from known setup: 3 supported tokens
+        (address[] memory tokensBefore, ) = fraxiversarry.getSupportedErc20s();
+        assertEq(tokensBefore.length, 3);
+
+        // Remove the *middle* token, guaranteeing that we enter the loop and hit `break;`
+        vm.prank(owner);
+        fraxiversarry.updateBaseAssetMintPrice(address(sfrxusd), 0);
+
+        (address[] memory tokensAfter, ) = fraxiversarry.getSupportedErc20s();
+        assertEq(tokensAfter.length, 2);
+
+        // The remaining tokens should be wfrax and sfrxeth (order doesn’t matter)
+        bool foundWfrax;
+        bool foundSfrxeth;
+
+        for (uint256 i; i < tokensAfter.length; ++i) {
+            if (tokensAfter[i] == address(wfrax)) foundWfrax = true;
+            if (tokensAfter[i] == address(sfrxeth)) foundSfrxeth = true;
+        }
+
+        assertTrue(foundWfrax);
+        assertTrue(foundSfrxeth);
+    }
+}
+
+// ----------------------------------------------------------
+// Internal harness to cover _increaseBalance (and _baseURI)
+// ----------------------------------------------------------
+error ERC721EnumerableForbiddenBatchMint();
+
+contract FraxiversarryInternalHarness is Fraxiversarry {
+    constructor(address initialOwner) Fraxiversarry(initialOwner) {}
+
+    function exposedIncreaseBalance(address account, uint128 value) external {
+        _increaseBalance(account, value);
+    }
+
+    function exposedBaseURI() external pure returns (string memory) {
+        return _baseURI();
+    }
+}
+
+contract FraxiversarryInternalHarnessTest is Test {
+    function testIncreaseBalanceOverrideIsUsed() public {
+        FraxiversarryInternalHarness h = new FraxiversarryInternalHarness(address(this));
+
+        address user = address(0xBEEF);
+
+        // We never use _increaseBalance in production, but if someone calls it with
+        // a non-zero value, OZ's ERC721Enumerable logic MUST revert with this error.
+        vm.expectRevert(ERC721EnumerableForbiddenBatchMint.selector);
+        h.exposedIncreaseBalance(user, 1);
+    }
+
+    function testBaseURIInternalFunction() public {
+        FraxiversarryInternalHarness h = new FraxiversarryInternalHarness(address(this));
+        assertEq(h.exposedBaseURI(), "");
     }
 }
