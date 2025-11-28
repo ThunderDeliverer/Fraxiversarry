@@ -63,7 +63,7 @@ contract Fraxiversarry is
     }
 
     function _baseURI() internal pure override returns (string memory) {
-        return "https://tba.frax/";
+        return "";
     }
 
     function pause() public onlyOwner {
