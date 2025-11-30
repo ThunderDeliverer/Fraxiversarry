@@ -27,6 +27,8 @@ contract Fraxiversarry is
     IFraxiversarryErrors,
     IFraxiversarryEvents
 {
+    address public constant WFRAX_ADDRESS = 0xFc00000000000000000000000000000000000002;
+
     mapping(address erc20 => uint256 price) public mintPrices;
     mapping(address erc20 => string uri) public baseAssetTokenUris;
     mapping(uint256 index => address erc20) public supportedErc20s;
@@ -38,27 +40,37 @@ contract Fraxiversarry is
     mapping(uint256 tokenId => bool nonTransferable) public isNonTransferrable;
     mapping(uint256 tokenId => TokenType tokenType) public tokenTypes;
 
-    uint256 private _nextTokenId;
-    uint256 private _nextPremiumTokenId;
+    uint256 public nextTokenId;
+    uint256 public nextGiftTokenId;
+    uint256 public nextPremiumTokenId;
     uint256 public totalNumberOfSupportedErc20s;
     uint256 public mintingLimit;
+    uint256 public giftMintingLimit;
+    uint256 public giftMintingPrice;
 
     enum TokenType {
         NONEXISTENT, // 0 - Token does not exist
         BASE, // 1 - NFTs that are minted using ERC20 tokens
         FUSED, // 2 - NFTs that are created by combining multiple base NFTs
-        SOULBOUND // 3 - NFTs that are non-transferable and tied to a specific user
+        SOULBOUND, // 3 - NFTs that are non-transferable and tied to a specific user
+        GIFT // 4 - NFTs that are gifted and have a separate minting limit and separate mint prices
     }
 
+    string private giftTokenUri;
     string private premiumTokenUri;
 
     constructor(address initialOwner)
         ERC721("Fraxiversarry", "FRAX5Y")
         Ownable(initialOwner)
     {
-        mintingLimit = 12000;
-        _nextPremiumTokenId = mintingLimit;
+        mintingLimit = 12_000;
+        giftMintingLimit = 50_000;
+        giftMintingPrice = 50 * 1e18; // 50 WFRAX
+        nextGiftTokenId = mintingLimit;
+        nextPremiumTokenId = mintingLimit + giftMintingLimit;
 
+        //TODO: Set correct URIs
+        giftTokenUri = "https://gift.tba.frax/";
         premiumTokenUri = "https://premium.tba.frax/";
     }
 
@@ -75,10 +87,10 @@ contract Fraxiversarry is
     }
 
     function paidMint(address erc20Contract) public returns (uint256) {
-        if (_nextTokenId >= mintingLimit) revert MintingLimitReached();
+        if (nextTokenId >= mintingLimit) revert MintingLimitReached();
         if (mintPrices[erc20Contract] == 0) revert UnsupportedToken();
 
-        uint256 tokenId = _nextTokenId++;
+        uint256 tokenId = nextTokenId++;
         _transferERC20ToToken(erc20Contract, tokenId, msg.sender);
 
         // Update underlying assets with the asset being used when minting
@@ -94,8 +106,30 @@ contract Fraxiversarry is
         return tokenId;
     }
 
+    function giftMint(address recipient) public returns (uint256) {
+        if (nextGiftTokenId >= mintingLimit + giftMintingLimit) revert GiftMintingLimitReached();
+
+        uint256 tokenId = nextGiftTokenId;
+        nextGiftTokenId += 1;
+        _transferERC20ToToken(WFRAX_ADDRESS, tokenId, msg.sender, giftMintingPrice);
+
+        // Update underlying assets with the asset being used when minting
+        underlyingAssets[tokenId][numberOfTokenUnderlyingAssets[tokenId]] = WFRAX_ADDRESS;
+        numberOfTokenUnderlyingAssets[tokenId] += 1;
+
+        // Set the token type to GIFT
+        tokenTypes[tokenId] = TokenType.GIFT;
+
+        _safeMint(recipient, tokenId);
+        _setTokenURI(tokenId, giftTokenUri);
+
+        emit GiftMinted(msg.sender, recipient, tokenId, giftMintingPrice);
+
+        return tokenId;
+    }
+
     function soulboundMint(address recipient, string memory tokenUri) public onlyOwner returns (uint256){
-        uint256 tokenId = _nextPremiumTokenId;
+        uint256 tokenId = nextPremiumTokenId;
 
         _safeMint(recipient, tokenId);
         _setTokenURI(tokenId, tokenUri);
@@ -103,7 +137,7 @@ contract Fraxiversarry is
         isNonTransferrable[tokenId] = true;
         tokenTypes[tokenId] = TokenType.SOULBOUND;
 
-        _nextPremiumTokenId += 1;
+        nextPremiumTokenId += 1;
 
         emit NewSoulboundToken(recipient, tokenId);
 
@@ -130,13 +164,17 @@ contract Fraxiversarry is
         baseAssetTokenUris[erc20Contract] = uri;
     }
 
+    function setGiftTokenUri(string memory uri) public onlyOwner {
+        giftTokenUri = uri;
+    }
+
     function setPremiumTokenUri(string memory uri) public onlyOwner {
         premiumTokenUri = uri;
     }
 
     function refreshBaseTokenUris(uint256 firstTokenId, uint256 lastTokenId) public onlyOwner {
         if (lastTokenId < firstTokenId) revert InvalidRange();
-        if (lastTokenId >= _nextTokenId) revert OutOfBounds();
+        if (lastTokenId >= nextTokenId) revert OutOfBounds();
 
         for (uint256 tokenId = firstTokenId; tokenId <= lastTokenId; ) {
             address underlyingAsset = underlyingAssets[tokenId][0];
@@ -154,10 +192,29 @@ contract Fraxiversarry is
         emit BatchMetadataUpdate(firstTokenId, lastTokenId);
     }
 
+    function refreshGiftTokenUris(uint256 firstTokenId, uint256 lastTokenId) public onlyOwner {
+        if (firstTokenId < mintingLimit) revert OutOfBounds();
+        if (lastTokenId < firstTokenId) revert InvalidRange();
+        if (lastTokenId >= nextGiftTokenId) revert OutOfBounds();
+
+        for (uint256 tokenId = firstTokenId; tokenId <= lastTokenId; ) {
+            // Only update if there is an underlying asset (if the token exists)
+            if (erc20Balances[tokenId][WFRAX_ADDRESS] > 0) {
+                _setTokenURI(tokenId, giftTokenUri);
+            }
+
+            unchecked {
+                ++tokenId;
+            }
+        }
+
+        emit BatchMetadataUpdate(firstTokenId, lastTokenId);
+    }
+
     function refreshPremiumTokenUris(uint256 firstTokenId, uint256 lastTokenId) public onlyOwner {
         if (lastTokenId < firstTokenId) revert InvalidRange();
-        if (firstTokenId < mintingLimit) revert OutOfBounds();
-        if (lastTokenId >= _nextPremiumTokenId) revert OutOfBounds();
+        if (firstTokenId < mintingLimit + giftMintingLimit) revert OutOfBounds();
+        if (lastTokenId >= nextPremiumTokenId) revert OutOfBounds();
 
         for (uint256 tokenId = firstTokenId; tokenId <= lastTokenId; ) {
             // Only update if the token has underlying tokens (this ensures that the token exists and that it isn't soulbound)
@@ -173,6 +230,12 @@ contract Fraxiversarry is
         emit BatchMetadataUpdate(firstTokenId, lastTokenId);
     }
 
+    function updateSpecificTokenUri(uint256 tokenId, string memory uri) public onlyOwner {
+        if (tokenTypes[tokenId] == TokenType.NONEXISTENT) revert TokenDoesNotExist();
+
+        _setTokenURI(tokenId, uri);
+    }
+
     function updateBaseAssetMintPrice(address erc20Contract, uint256 mintPrice) public onlyOwner {
         uint256 previousMintPrice = mintPrices[erc20Contract];
         if (previousMintPrice == mintPrice) revert AttemptigToSetExistingMintPrice();
@@ -185,7 +248,7 @@ contract Fraxiversarry is
         }
 
         if (mintPrice == 0) {
-            uint256 erc20Index;
+            uint256 erc20Index = type(uint256).max;
 
             for (uint i; i < totalNumberOfSupportedErc20s; ) {
                 if (supportedErc20s[i] == erc20Contract) {
@@ -198,12 +261,26 @@ contract Fraxiversarry is
                 }
             }
 
+            // This shouldn't even be reachable, but it is defensive guard in case the guard at the beginning of the
+            //  function doesn't catch an unsupported token
+            if (erc20Index == type(uint256).max) revert UnsupportedToken();
+
             supportedErc20s[erc20Index] = supportedErc20s[totalNumberOfSupportedErc20s - 1];
             totalNumberOfSupportedErc20s -= 1;
             supportedErc20s[totalNumberOfSupportedErc20s] = address(0);
         }
 
         emit MintPriceUpdated(erc20Contract, previousMintPrice, mintPrice);
+    }
+
+    function updateGiftMintingPrice(uint256 newPrice) public onlyOwner {
+        if (newPrice <= 1e18) revert InvalidGiftMintPrice(); // Minimum 1 WFRAX
+        uint256 previousPrice = giftMintingPrice;
+        if (previousPrice == newPrice) revert AttemptigToSetExistingMintPrice();
+
+        giftMintingPrice = newPrice;
+
+        emit GiftMintPriceUpdated(previousPrice, newPrice);
     }
 
     function getUnderlyingTokenIds(uint256 premiumTokenId) external view
@@ -222,7 +299,7 @@ contract Fraxiversarry is
         if (tokenTypes[tokenId] == TokenType.NONEXISTENT) revert TokenDoesNotExist();
         if (tokenTypes[tokenId] == TokenType.SOULBOUND) return (new address[](0), new uint256[](0));
 
-        if (tokenTypes[tokenId] == TokenType.BASE) {
+        if (tokenTypes[tokenId] == TokenType.BASE || tokenTypes[tokenId] == TokenType.GIFT) {
             erc20Contracts = new address[](1);
             balances = new uint256[](1);
 
@@ -321,7 +398,7 @@ contract Fraxiversarry is
             underlyingAssets[tokenId2][0] == underlyingAssets[tokenId3][0]
         ) revert SameTokenUnderlyingAssets();
 
-        premiumTokenId = _nextPremiumTokenId;
+        premiumTokenId = nextPremiumTokenId;
 
         _update(address(this), tokenId1, msg.sender);
         _update(address(this), tokenId2, msg.sender);
@@ -337,7 +414,7 @@ contract Fraxiversarry is
 
         tokenTypes[premiumTokenId] = TokenType.FUSED;
 
-        _nextPremiumTokenId += 1;
+        nextPremiumTokenId += 1;
 
         emit TokenFused(msg.sender, tokenId1, tokenId2, tokenId3, premiumTokenId);
     }
@@ -395,17 +472,27 @@ contract Fraxiversarry is
         uint256 tokenId,
         address from
     ) internal {
-        IERC20 token = IERC20(erc20Contract);
         uint256 price = mintPrices[erc20Contract];
 
-        if(token.allowance(from, address(this)) < price) revert InsufficientAllowance();
-        if(token.balanceOf(from) < price) revert InsufficientBalance();
+        _transferERC20ToToken(erc20Contract, tokenId, from, price);
+    }
 
-        if(!token.transferFrom(from, address(this), price)) revert TransferFailed();
+    function _transferERC20ToToken(
+        address erc20Contract,
+        uint256 tokenId,
+        address from,
+        uint256 amount
+    ) internal {
+        IERC20 token = IERC20(erc20Contract);
 
-        erc20Balances[tokenId][erc20Contract] += price;
+        if(token.allowance(from, address(this)) < amount) revert InsufficientAllowance();
+        if(token.balanceOf(from) < amount) revert InsufficientBalance();
 
-        emit ReceivedERC20(erc20Contract, tokenId, from, price);
+        if(!token.transferFrom(from, address(this), amount)) revert TransferFailed();
+
+        erc20Balances[tokenId][erc20Contract] += amount;
+
+        emit ReceivedERC20(erc20Contract, tokenId, from, amount);
     }
 
     // The following functions are overrides required by Solidity.

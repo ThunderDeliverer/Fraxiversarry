@@ -12,7 +12,8 @@ import {IERC7590} from "../src/interfaces/IERC7590.sol";
 import {IERC6454} from "../src/interfaces/IERC6454.sol";
 import {IERC4906} from "openzeppelin-contracts/contracts/interfaces/IERC4906.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import {IERC7590} from "../src/interfaces/IERC7590.sol";
+import {IERC721} from "openzeppelin-contracts/contracts/token/ERC721/IERC721.sol";
+import {IERC165} from "openzeppelin-contracts/contracts/utils/introspection/IERC165.sol";
 
 import {MockERC20} from "./mocks/MockERC20.sol";
 
@@ -61,6 +62,11 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         // Deploy Fraxiversarry with a dedicated owner
         fraxiversarry = new Fraxiversarry(owner);
 
+        // Move mocked wFRAX to actual wFRAX address
+        address wFraxAddress = fraxiversarry.WFRAX_ADDRESS();
+        vm.etch(wFraxAddress, address(wfrax).code);
+        wfrax = MockERC20(wFraxAddress);
+
         // Fund users
         wfrax.mint(alice, 1e22);
         sfrxusd.mint(alice, 1e22);
@@ -86,14 +92,16 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         assertEq(fraxiversarry.name(), "Fraxiversarry");
         assertEq(fraxiversarry.symbol(), "FRAX5Y");
         assertEq(fraxiversarry.mintingLimit(), 12000);
+        assertEq(fraxiversarry.giftMintingLimit(), 50000);
+        assertEq(fraxiversarry.giftMintingPrice(), 50 * 1e18);
 
-        // First soulbound token should use tokenId == mintingLimit (12000)
+        // First soulbound token should use tokenId == mintingLimit (62000)
         vm.startPrank(owner);
         fraxiversarry.setPremiumTokenUri("https://premium.tba.fraxiversarry/custom.json");
         uint256 sbId = fraxiversarry.soulboundMint(alice, "https://premium.tba.fraxiversarry/custom.json");
         vm.stopPrank();
 
-        assertEq(sbId, 12000);
+        assertEq(sbId, fraxiversarry.mintingLimit() + fraxiversarry.giftMintingLimit());
         assertEq(fraxiversarry.ownerOf(sbId), alice);
         assertEq(fraxiversarry.tokenURI(sbId), "https://premium.tba.fraxiversarry/custom.json");
         assertEq(uint256(fraxiversarry.tokenTypes(sbId)), uint256(Fraxiversarry.TokenType.SOULBOUND));
@@ -291,6 +299,215 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         vm.stopPrank();
     }
 
+    function testGiftMintHappyPath() public {
+        uint256 mintingLimit = fraxiversarry.mintingLimit();
+        uint256 giftPrice = fraxiversarry.giftMintingPrice();
+
+        // Alice approves enough wFRAX for at least one gift mint
+        vm.startPrank(alice);
+        wfrax.approve(address(fraxiversarry), giftPrice);
+
+        // Record logs so we can validate ReceivedERC20
+        vm.recordLogs();
+        uint256 tokenId = fraxiversarry.giftMint(alice);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        vm.stopPrank();
+
+        // --- Basic properties ---
+        assertEq(tokenId, mintingLimit, "first gift tokenId should start at mintingLimit");
+        assertEq(fraxiversarry.ownerOf(tokenId), alice);
+        assertEq(uint256(fraxiversarry.tokenTypes(tokenId)), uint256(Fraxiversarry.TokenType.GIFT));
+        assertEq(fraxiversarry.tokenURI(tokenId), "https://gift.tba.frax/");
+
+        // isTransferable should be true (not soulbound)
+        assertTrue(fraxiversarry.isTransferable(tokenId, alice, bob));
+
+        // --- Underlying asset / balances ---
+        assertEq(
+            fraxiversarry.underlyingAssets(tokenId, 0),
+            address(wfrax),
+            "gift underlying asset"
+        );
+        assertEq(
+            fraxiversarry.numberOfTokenUnderlyingAssets(tokenId),
+            1,
+            "gift token underlying count"
+        );
+        assertEq(
+            fraxiversarry.erc20Balances(tokenId, address(wfrax)),
+            giftPrice,
+            "gift token internal balance"
+        );
+
+        // External ERC20 balances
+        assertEq(
+            wfrax.balanceOf(address(fraxiversarry)),
+            giftPrice,
+            "contract should hold giftPrice"
+        );
+        assertEq(
+            wfrax.balanceOf(alice),
+            1e22 - giftPrice,
+            "alice should be debited giftPrice"
+        );
+
+        // --- Check ReceivedERC20 event ---
+        bytes32 expectedSig = keccak256("ReceivedERC20(address,uint256,address,uint256)");
+        bool found;
+        for (uint256 i; i < logs.length; ++i) {
+            Vm.Log memory logEntry = logs[i];
+
+            if (logEntry.topics[0] == expectedSig) {
+                found = true;
+
+                // indexed: erc20Contract, toTokenId, from
+                assertEq(
+                    address(uint160(uint256(logEntry.topics[1]))),
+                    address(wfrax),
+                    "ReceivedERC20.erc20Contract mismatch"
+                );
+                assertEq(uint256(logEntry.topics[2]), tokenId, "ReceivedERC20.toTokenId mismatch");
+                assertEq(
+                    address(uint160(uint256(logEntry.topics[3]))),
+                    alice,
+                    "ReceivedERC20.from mismatch"
+                );
+
+                // data: amount
+                (uint256 amount) = abi.decode(logEntry.data, (uint256));
+                assertEq(amount, giftPrice, "ReceivedERC20.amount mismatch");
+            }
+        }
+        assertTrue(found, "ReceivedERC20 event for giftMint not found");
+    }
+
+    function testGiftMintEmitsGiftMintedEvent() public {
+        uint256 giftPrice = fraxiversarry.giftMintingPrice();
+        uint256 mintingLimit = fraxiversarry.mintingLimit();
+
+        vm.startPrank(alice);
+        wfrax.approve(address(fraxiversarry), giftPrice);
+        vm.recordLogs();
+        uint256 tokenId = fraxiversarry.giftMint(bob);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        vm.stopPrank();
+
+        assertEq(tokenId, mintingLimit);
+
+        bytes32 expectedSig = keccak256(
+            "GiftMinted(address,address,uint256,uint256)"
+        );
+        bool found;
+
+        for (uint256 i; i < logs.length; ++i) {
+            Vm.Log memory logEntry = logs[i];
+            if (logEntry.topics[0] == expectedSig) {
+                found = true;
+
+                // indexed: minter, recipient
+                assertEq(
+                    address(uint160(uint256(logEntry.topics[1]))),
+                    alice,
+                    "GiftMinted.minter mismatch"
+                );
+                assertEq(
+                    address(uint160(uint256(logEntry.topics[2]))),
+                    bob,
+                    "GiftMinted.recipient mismatch"
+                );
+
+                (uint256 loggedTokenId, uint256 loggedPrice) =
+                    abi.decode(logEntry.data, (uint256, uint256));
+                assertEq(loggedTokenId, tokenId);
+                assertEq(loggedPrice, giftPrice);
+            }
+        }
+
+        assertTrue(found, "GiftMinted event not found");
+    }
+
+    function testGiftMintRevertsOnInsufficientAllowance() public {
+        // Alice has balance but gives no allowance
+        // (she already has 1e22 from setUp)
+        vm.prank(alice);
+        vm.expectRevert(InsufficientAllowance.selector);
+        fraxiversarry.giftMint(alice);
+    }
+
+    function testGiftMintRevertsOnInsufficientBalance() public {
+        uint256 giftPrice = fraxiversarry.giftMintingPrice();
+
+        // Approve, then move all tokens away so balance < giftPrice
+        vm.startPrank(alice);
+        wfrax.approve(address(fraxiversarry), giftPrice);
+        wfrax.transfer(bob, wfrax.balanceOf(alice)); // drain alice completely
+
+        vm.expectRevert(InsufficientBalance.selector);
+        fraxiversarry.giftMint(alice);
+        vm.stopPrank();
+    }
+
+    function testGiftMintRevertsOnTransferFailed() public {
+        uint256 giftPrice = fraxiversarry.giftMintingPrice();
+
+        vm.startPrank(alice);
+        wfrax.approve(address(fraxiversarry), giftPrice);
+
+        // Force transferFrom to fail inside mock
+        wfrax.setFailTransferFrom(true);
+
+        vm.expectRevert(TransferFailed.selector);
+        fraxiversarry.giftMint(alice);
+        vm.stopPrank();
+    }
+
+    function testGiftMintRevertsWhenGiftMintingLimitReached() public {
+        // Shrink giftMintingLimit to 1 so the second mint hits the limit
+        uint256 slot = _stdStore
+            .target(address(fraxiversarry))
+            .sig("giftMintingLimit()")
+            .find();
+
+        vm.store(address(fraxiversarry), bytes32(slot), bytes32(uint256(1)));
+
+        uint256 giftPrice = fraxiversarry.giftMintingPrice();
+
+        vm.startPrank(alice);
+        // Give a large allowance so both calls pass allowance check
+        wfrax.approve(address(fraxiversarry), giftPrice * 2);
+
+        // First gift mint succeeds
+        fraxiversarry.giftMint(alice);
+
+        // Second must revert with GiftMintingLimitReached
+        vm.expectRevert(GiftMintingLimitReached.selector);
+        fraxiversarry.giftMint(alice);
+        vm.stopPrank();
+    }
+
+    function testGetUnderlyingBalancesForGiftTokenBehavesLikeBase() public {
+        uint256 giftPrice = fraxiversarry.giftMintingPrice();
+
+        vm.startPrank(alice);
+        wfrax.approve(address(fraxiversarry), giftPrice);
+        uint256 tokenId = fraxiversarry.giftMint(alice);
+        vm.stopPrank();
+
+        (address[] memory erc20s, uint256[] memory balances) = fraxiversarry.getUnderlyingBalances(tokenId);
+
+        assertEq(erc20s.length, 1);
+        assertEq(balances.length, 1);
+        assertEq(erc20s[0], address(wfrax));
+        assertEq(balances[0], giftPrice);
+    }
+
+    function testGetUnderlyingTokenIdsForNeverFusedReturnsZeros() public {
+        (uint256 a, uint256 b, uint256 c) = fraxiversarry.getUnderlyingTokenIds(999999);
+        assertEq(a, 0);
+        assertEq(b, 0);
+        assertEq(c, 0);
+    }
+
     // ----------------------------------------------------------
     // Soulbound mint + ERC6454 behavior
     // ----------------------------------------------------------
@@ -479,8 +696,8 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         // ---- State checks ----
 
-        // First premium token id should be mintingLimit (12000)
-        assertEq(premiumId, 12000);
+        // First premium token id should be mintingLimit + giftMintingLimit (62000)
+        assertEq(premiumId, fraxiversarry.mintingLimit() + fraxiversarry.giftMintingLimit());
         assertEq(fraxiversarry.ownerOf(premiumId), alice);
         assertEq(
             uint256(fraxiversarry.tokenTypes(premiumId)),
@@ -668,6 +885,25 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         vm.prank(alice);
         vm.expectRevert(CanOnlyUnfuseFusedTokens.selector);
         fraxiversarry.unfuseTokens(tokenId);
+    }
+
+    function testUnfuseTokensTwiceReverts() public {
+        (uint256 t1, uint256 t2, uint256 t3) = _mintThreeDifferentBases(alice);
+
+        vm.prank(alice);
+        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3);
+
+        vm.prank(alice);
+        fraxiversarry.unfuseTokens(premiumId);
+
+        vm.prank(alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                bytes4(keccak256("ERC721NonexistentToken(uint256)")),
+                premiumId
+            )
+        );
+        fraxiversarry.unfuseTokens(premiumId);
     }
 
     function testBurnRevertsForFusedToken() public {
@@ -960,6 +1196,12 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         // IERC4906
         assertTrue(fraxiversarry.supportsInterface(type(IERC4906).interfaceId));
 
+        // ERC165
+        assertTrue(fraxiversarry.supportsInterface(type(IERC165).interfaceId));
+
+        // ERC721
+        assertTrue(fraxiversarry.supportsInterface(type(IERC721).interfaceId));
+
         // Random interface should be false
         assertFalse(fraxiversarry.supportsInterface(bytes4(0xffffffff)));
     }
@@ -1119,6 +1361,290 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         assertTrue(foundWfrax);
         assertTrue(foundSfrxeth);
+    }
+
+    function testUpdateBaseAssetMintPriceRemovalDefensiveGuard() public {
+        // Sanity: wfrax has non-zero price
+        assertEq(fraxiversarry.mintPrices(address(wfrax)), WFRAX_PRICE);
+
+        uint256 len = fraxiversarry.totalNumberOfSupportedErc20s();
+        // Corrupt all supportedErc20s entries so none point to wfrax
+        for (uint256 i; i < len; ++i) {
+            uint256 slot = _stdStore
+                .target(address(fraxiversarry))
+                .sig("supportedErc20s(uint256)")
+                .with_key(i)
+                .find();
+
+            vm.store(
+                address(fraxiversarry),
+                bytes32(slot),
+                bytes32(uint256(uint160(address(0xDEAD))))
+            );
+        }
+
+        // Now removing wfrax (setting price to 0) should hit UnsupportedToken guard
+        vm.prank(owner);
+        vm.expectRevert(UnsupportedToken.selector);
+        fraxiversarry.updateBaseAssetMintPrice(address(wfrax), 0);
+    }
+
+    function testUpdateGiftMintingPriceHappyPath() public {
+        uint256 oldPrice = fraxiversarry.giftMintingPrice();
+        uint256 newPrice = oldPrice + 1e18;
+
+        vm.recordLogs();
+        vm.prank(owner);
+        fraxiversarry.updateGiftMintingPrice(newPrice);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+
+        assertEq(fraxiversarry.giftMintingPrice(), newPrice);
+
+        bytes32 expectedSig = keccak256("GiftMintPriceUpdated(uint256,uint256)");
+        bool found;
+        for (uint256 i; i < logs.length; ++i) {
+            if (logs[i].topics[0] == expectedSig) {
+                found = true;
+                (uint256 prev, uint256 updated) =
+                    abi.decode(logs[i].data, (uint256, uint256));
+                assertEq(prev, oldPrice);
+                assertEq(updated, newPrice);
+            }
+        }
+        assertTrue(found, "GiftMintPriceUpdated not emitted");
+    }
+
+    function testUpdateGiftMintingPriceRevertsOnTooLowPrice() public {
+        vm.prank(owner);
+        vm.expectRevert(InvalidGiftMintPrice.selector);
+        fraxiversarry.updateGiftMintingPrice(1e18); // boundary: <= 1e18
+    }
+
+    function testUpdateGiftMintingPriceRevertsOnSamePrice() public {
+        uint256 current = fraxiversarry.giftMintingPrice();
+        vm.prank(owner);
+        vm.expectRevert(AttemptigToSetExistingMintPrice.selector);
+        fraxiversarry.updateGiftMintingPrice(current);
+    }
+
+    function testUpdateGiftMintingPriceOnlyOwner() public {
+        vm.prank(alice);
+        vm.expectRevert(); // Ownable
+        fraxiversarry.updateGiftMintingPrice(100e18);
+    }
+
+    function testSetGiftTokenUriAndRefreshGiftTokens() public {
+        uint256 giftPrice = fraxiversarry.giftMintingPrice();
+
+        vm.startPrank(alice);
+        wfrax.approve(address(fraxiversarry), giftPrice);
+        uint256 giftId = fraxiversarry.giftMint(alice);
+        vm.stopPrank();
+
+        // Owner changes gift URI
+        vm.prank(owner);
+        fraxiversarry.setGiftTokenUri("https://gift.tba.fraxiversarry/new.json");
+
+        // Refresh and assert
+        vm.prank(owner);
+        fraxiversarry.refreshGiftTokenUris(giftId, giftId);
+
+        assertEq(
+            fraxiversarry.tokenURI(giftId),
+            "https://gift.tba.fraxiversarry/new.json"
+        );
+    }
+
+    function testSetGiftTokenUriOnlyOwner() public {
+        vm.prank(alice);
+        vm.expectRevert(); // Ownable
+        fraxiversarry.setGiftTokenUri("uri");
+    }
+
+    function testSetPremiumTokenUriOnlyOwner() public {
+        vm.prank(alice);
+        vm.expectRevert(); // Ownable
+        fraxiversarry.setPremiumTokenUri("uri");
+    }
+
+    function testUpdateSpecificTokenUriEmitsMetadataUpdate() public {
+        uint256 tokenId = _mintBaseWithWfrax(alice);
+
+        vm.recordLogs();
+        vm.prank(owner);
+        fraxiversarry.updateSpecificTokenUri(tokenId, "https://custom/meta-event.json");
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+
+        // Check URI
+        assertEq(fraxiversarry.tokenURI(tokenId), "https://custom/meta-event.json");
+
+        // Check MetadataUpdate event
+        bytes32 expectedSig = keccak256("MetadataUpdate(uint256)");
+        bool found;
+        for (uint256 i; i < logs.length; ++i) {
+            Vm.Log memory logEntry = logs[i];
+
+            if (logEntry.topics.length > 0 && logEntry.topics[0] == expectedSig) {
+                found = true;
+
+                // IERC4906.MetadataUpdate has NO indexed params, so tokenId is in data
+                (uint256 loggedId) = abi.decode(logEntry.data, (uint256));
+                assertEq(loggedId, tokenId);
+            }
+        }
+        assertTrue(found, "MetadataUpdate event not emitted");
+    }
+
+    function testUpdateSpecificTokenUriHappyPath() public {
+        uint256 tokenId = _mintBaseWithWfrax(alice);
+
+        vm.prank(owner);
+        fraxiversarry.updateSpecificTokenUri(tokenId, "https://custom/special.json");
+
+        assertEq(fraxiversarry.tokenURI(tokenId), "https://custom/special.json");
+    }
+
+    function testUpdateSpecificTokenUriRevertsForNonexistentToken() public {
+        uint256 tokenId = _mintBaseWithWfrax(alice);
+
+        // Burn it so tokenTypes[tokenId] becomes NONEXISTENT
+        vm.prank(alice);
+        fraxiversarry.burn(tokenId);
+
+        vm.prank(owner);
+        vm.expectRevert(TokenDoesNotExist.selector);
+        fraxiversarry.updateSpecificTokenUri(tokenId, "https://custom/special.json");
+    }
+
+    function testRefreshGiftTokenUrisRevertsOnInvalidRange() public {
+        vm.prank(owner);
+        vm.expectRevert(InvalidRange.selector);
+        fraxiversarry.refreshGiftTokenUris(13000, 12000);
+    }
+
+    function testRefreshGiftTokenUrisRevertsIfFirstBelowMintingLimit() public {
+        vm.prank(owner);
+        vm.expectRevert(OutOfBounds.selector);
+        fraxiversarry.refreshGiftTokenUris(0, 10);
+    }
+
+    function testRefreshGiftTokenUrisRevertsIfLastOutOfBounds() public {
+        // Mint exactly one gift to advance nextGiftTokenId
+        uint256 giftPrice = fraxiversarry.giftMintingPrice();
+        vm.startPrank(alice);
+        wfrax.approve(address(fraxiversarry), giftPrice);
+        uint256 giftId = fraxiversarry.giftMint(alice);
+        vm.stopPrank();
+
+        uint256 last = fraxiversarry.nextGiftTokenId(); // >= nextGiftTokenId
+
+        vm.prank(owner);
+        vm.expectRevert(OutOfBounds.selector);
+        fraxiversarry.refreshGiftTokenUris(giftId, last);
+    }
+
+    function testIsTransferableForAllTokenTypesAndBurned() public {
+        // BASE
+        uint256 baseId = _mintBaseWithWfrax(alice);
+        assertTrue(fraxiversarry.isTransferable(baseId, alice, bob));
+
+        // GIFT
+        uint256 giftPrice = fraxiversarry.giftMintingPrice();
+        vm.startPrank(alice);
+        wfrax.approve(address(fraxiversarry), giftPrice);
+        uint256 giftId = fraxiversarry.giftMint(alice);
+        vm.stopPrank();
+        assertTrue(fraxiversarry.isTransferable(giftId, alice, bob));
+
+        // SOULBOUND
+        vm.startPrank(owner);
+        uint256 sbId = fraxiversarry.soulboundMint(alice, "uri");
+        vm.stopPrank();
+        assertFalse(fraxiversarry.isTransferable(sbId, alice, bob));
+
+        // FUSED
+        (uint256 t1, uint256 t2, uint256 t3) = _mintThreeDifferentBases(alice);
+        vm.prank(alice);
+        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3);
+        assertTrue(fraxiversarry.isTransferable(premiumId, alice, bob));
+
+        // Burned BASE token: mapping flag is false, so still returns true
+        vm.prank(alice);
+        fraxiversarry.burn(baseId);
+        assertTrue(fraxiversarry.isTransferable(baseId, alice, bob));
+    }
+
+    function testIERC7590BalanceOfERC20ZeroForUnheldAsset() public {
+        uint256 tokenId = _mintBaseWithWfrax(alice);
+        // tokenId holds wfrax, not sfrxusd
+        assertEq(fraxiversarry.balanceOfERC20(address(sfrxusd), tokenId), 0);
+    }
+
+    function testIERC7590TransferOutNonceWithMultipleAssets() public {
+        uint256 tokenId = _mintBaseWithWfrax(alice);
+
+        // Add a second underlying asset (sfrxusd) to this tokenId
+        // 1) Mint sfrxusd to the contract so transfers won't fail
+        sfrxusd.mint(address(fraxiversarry), 123);
+
+        // 2) Set erc20Balances[tokenId][sfrxusd] = 123
+        uint256 balanceSlot = _stdStore
+            .target(address(fraxiversarry))
+            .sig("erc20Balances(uint256,address)")
+            .with_key(tokenId)
+            .with_key(address(sfrxusd))
+            .find();
+
+        vm.store(address(fraxiversarry), bytes32(balanceSlot), bytes32(uint256(123)));
+
+        // 3) Increase numberOfTokenUnderlyingAssets to 2
+        uint256 numSlot = _stdStore
+            .target(address(fraxiversarry))
+            .sig("numberOfTokenUnderlyingAssets(uint256)")
+            .with_key(tokenId)
+            .find();
+
+        vm.store(address(fraxiversarry), bytes32(numSlot), bytes32(uint256(2)));
+
+        // 4) Set underlyingAssets[tokenId][1] = sfrxusd
+        uint256 underlyingSlot1 = _stdStore
+            .target(address(fraxiversarry))
+            .sig("underlyingAssets(uint256,uint256)")
+            .with_key(tokenId)
+            .with_key(uint256(1))
+            .find();
+
+        vm.store(
+            address(fraxiversarry),
+            bytes32(underlyingSlot1),
+            bytes32(uint256(uint160(address(sfrxusd))))
+        );
+
+        assertEq(fraxiversarry.erc20TransferOutNonce(tokenId), 0);
+
+        vm.prank(alice);
+        fraxiversarry.burn(tokenId);
+
+        // Two assets => two internal transfers => nonce == 2
+        assertEq(fraxiversarry.erc20TransferOutNonce(tokenId), 2);
+    }
+
+    function testFuseTokensWithRepeatedTokenIdReverts() public {
+        (uint256 t1, , uint256 t3) = _mintThreeDifferentBases(alice);
+
+        vm.prank(alice);
+        vm.expectRevert(SameTokenUnderlyingAssets.selector);
+        fraxiversarry.fuseTokens(t1, t1, t3);
+    }
+
+    function testTokenURIRevertsForBurnedToken() public {
+        uint256 tokenId = _mintBaseWithWfrax(alice);
+
+        vm.prank(alice);
+        fraxiversarry.burn(tokenId);
+
+        vm.expectRevert(); // ERC721: invalid token ID
+        fraxiversarry.tokenURI(tokenId);
     }
 }
 

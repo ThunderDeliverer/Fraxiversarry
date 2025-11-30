@@ -6,8 +6,10 @@ contract IFraxiversarryErrors {
     error CannotTransferSoulboundToken();
     error CanOnlyFuseBaseTokens();
     error CanOnlyUnfuseFusedTokens();
+    error GiftMintingLimitReached();
     error InsufficientAllowance();
     error InsufficientBalance();
+    error InvalidGiftMintPrice();
     error InvalidRange();
     error MintingLimitReached();
     error OnlyTokenOwnerCanBurnTheToken();
