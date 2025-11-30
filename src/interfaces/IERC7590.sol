@@ -9,12 +9,7 @@ interface IERC7590 {
      * @param from The address of the account from which the tokens are being transferred
      * @param amount The number of ERC-20 tokens received
      */
-    event ReceivedERC20(
-        address indexed erc20Contract,
-        uint256 indexed toTokenId,
-        address indexed from,
-        uint256 amount
-    );
+    event ReceivedERC20(address indexed erc20Contract, uint256 indexed toTokenId, address indexed from, uint256 amount);
 
     /**
      * @notice Used to notify the listeners that the ERC-20 tokens have been transferred.
@@ -24,10 +19,7 @@ interface IERC7590 {
      * @param amount The number of ERC-20 tokens transferred
      */
     event TransferredERC20(
-        address indexed erc20Contract,
-        uint256 indexed fromTokenId,
-        address indexed to,
-        uint256 amount
+        address indexed erc20Contract, uint256 indexed fromTokenId, address indexed to, uint256 amount
     );
 
     /**
@@ -36,10 +28,7 @@ interface IERC7590 {
      * @param tokenId The ID of the token being checked for ERC-20 balance
      * @return The amount of the specified ERC-20 tokens owned by a given token
      */
-    function balanceOfERC20(
-        address erc20Contract,
-        uint256 tokenId
-    ) external view returns (uint256);
+    function balanceOfERC20(address erc20Contract, uint256 tokenId) external view returns (uint256);
 
     /**
      * @notice Transfer ERC-20 tokens from a specific token.
@@ -68,19 +57,12 @@ interface IERC7590 {
      * @param amount The number of ERC-20 tokens to transfer
      * @param data Additional data with no specified format, to allow for custom logic
      */
-    function transferERC20ToToken(
-        address erc20Contract,
-        uint256 tokenId,
-        uint256 amount,
-        bytes memory data
-    ) external;
+    function transferERC20ToToken(address erc20Contract, uint256 tokenId, uint256 amount, bytes memory data) external;
 
     /**
      * @notice Nonce increased every time an ERC20 token is transferred out of a token
      * @param tokenId The ID of the token to check the nonce for
      * @return The nonce of the token
      */
-    function erc20TransferOutNonce(
-        uint256 tokenId
-    ) external view returns (uint256);
+    function erc20TransferOutNonce(uint256 tokenId) external view returns (uint256);
 }

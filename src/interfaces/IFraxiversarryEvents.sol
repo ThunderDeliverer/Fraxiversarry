@@ -2,12 +2,7 @@
 pragma solidity ^0.8.30;
 
 contract IFraxiversarryEvents {
-    event GiftMinted(
-        address indexed minter,
-        address indexed recipient,
-        uint256 tokenId,
-        uint256 mintPrice
-    );
+    event GiftMinted(address indexed minter, address indexed recipient, uint256 tokenId, uint256 mintPrice);
 
     event GiftMintPriceUpdated(uint256 previousMintPrice, uint256 newMintPrice);
 

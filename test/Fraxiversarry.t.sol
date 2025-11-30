@@ -28,34 +28,23 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
     address owner = address(0xA11CE);
     address alice = address(0xB0B);
-    address bob   = address(0xC0C);
+    address bob = address(0xC0C);
 
-    uint256 constant WFRAX_PRICE   = 100e18;
+    uint256 constant WFRAX_PRICE = 100e18;
     uint256 constant SFRXUSD_PRICE = 200e18;
     uint256 constant SFRXETH_PRICE = 300e18;
 
-    event BatchMetadataUpdate(
-        uint256 _fromTokenId,
-        uint256 _toTokenId
-    );
+    event BatchMetadataUpdate(uint256 _fromTokenId, uint256 _toTokenId);
 
-    event ReceivedERC20(
-        address indexed erc20Contract,
-        uint256 indexed toTokenId,
-        address indexed from,
-        uint256 amount
-    );
+    event ReceivedERC20(address indexed erc20Contract, uint256 indexed toTokenId, address indexed from, uint256 amount);
 
     event TransferredERC20(
-        address indexed erc20Contract,
-        uint256 indexed fromTokenId,
-        address indexed to,
-        uint256 amount
+        address indexed erc20Contract, uint256 indexed fromTokenId, address indexed to, uint256 amount
     );
 
     function setUp() public {
         // Deploy mocks
-        wfrax   = new MockERC20("Wrapped FRAX", "wFRAX");
+        wfrax = new MockERC20("Wrapped FRAX", "wFRAX");
         sfrxusd = new MockERC20("Staked Frax USD", "sfrxUSD");
         sfrxeth = new MockERC20("Staked Frax ETH", "sfrxETH");
 
@@ -74,11 +63,11 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         // Owner sets mint prices and URIs
         vm.startPrank(owner);
-        fraxiversarry.updateBaseAssetMintPrice(address(wfrax),   WFRAX_PRICE);
+        fraxiversarry.updateBaseAssetMintPrice(address(wfrax), WFRAX_PRICE);
         fraxiversarry.updateBaseAssetMintPrice(address(sfrxusd), SFRXUSD_PRICE);
         fraxiversarry.updateBaseAssetMintPrice(address(sfrxeth), SFRXETH_PRICE);
 
-        fraxiversarry.setBaseAssetTokenUri(address(wfrax),   "https://tba.fraxiversarry/wfrax.json");
+        fraxiversarry.setBaseAssetTokenUri(address(wfrax), "https://tba.fraxiversarry/wfrax.json");
         fraxiversarry.setBaseAssetTokenUri(address(sfrxusd), "https://tba.fraxiversarry/sfrxusd.json");
         fraxiversarry.setBaseAssetTokenUri(address(sfrxeth), "https://tba.fraxiversarry/sfrxeth.json");
         vm.stopPrank();
@@ -196,16 +185,8 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
                     address(wfrax),
                     "ReceivedERC20.erc20Contract mismatch"
                 );
-                assertEq(
-                    uint256(logEntry.topics[2]),
-                    tokenId,
-                    "ReceivedERC20.toTokenId mismatch"
-                );
-                assertEq(
-                    address(uint160(uint256(logEntry.topics[3]))),
-                    alice,
-                    "ReceivedERC20.from mismatch"
-                );
+                assertEq(uint256(logEntry.topics[2]), tokenId, "ReceivedERC20.toTokenId mismatch");
+                assertEq(address(uint160(uint256(logEntry.topics[3]))), alice, "ReceivedERC20.from mismatch");
 
                 // amount is in data
                 (uint256 amount) = abi.decode(logEntry.data, (uint256));
@@ -280,10 +261,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         fraxiversarry.updateBaseAssetMintPrice(address(wfrax), 1);
 
         // Overwrite mintingLimit to 1 using stdStorage
-        uint256 slot = _stdStore
-            .target(address(fraxiversarry))
-            .sig("mintingLimit()")
-            .find();
+        uint256 slot = _stdStore.target(address(fraxiversarry)).sig("mintingLimit()").find();
 
         vm.store(address(fraxiversarry), bytes32(slot), bytes32(uint256(1)));
 
@@ -323,33 +301,13 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         assertTrue(fraxiversarry.isTransferable(tokenId, alice, bob));
 
         // --- Underlying asset / balances ---
-        assertEq(
-            fraxiversarry.underlyingAssets(tokenId, 0),
-            address(wfrax),
-            "gift underlying asset"
-        );
-        assertEq(
-            fraxiversarry.numberOfTokenUnderlyingAssets(tokenId),
-            1,
-            "gift token underlying count"
-        );
-        assertEq(
-            fraxiversarry.erc20Balances(tokenId, address(wfrax)),
-            giftPrice,
-            "gift token internal balance"
-        );
+        assertEq(fraxiversarry.underlyingAssets(tokenId, 0), address(wfrax), "gift underlying asset");
+        assertEq(fraxiversarry.numberOfTokenUnderlyingAssets(tokenId), 1, "gift token underlying count");
+        assertEq(fraxiversarry.erc20Balances(tokenId, address(wfrax)), giftPrice, "gift token internal balance");
 
         // External ERC20 balances
-        assertEq(
-            wfrax.balanceOf(address(fraxiversarry)),
-            giftPrice,
-            "contract should hold giftPrice"
-        );
-        assertEq(
-            wfrax.balanceOf(alice),
-            1e22 - giftPrice,
-            "alice should be debited giftPrice"
-        );
+        assertEq(wfrax.balanceOf(address(fraxiversarry)), giftPrice, "contract should hold giftPrice");
+        assertEq(wfrax.balanceOf(alice), 1e22 - giftPrice, "alice should be debited giftPrice");
 
         // --- Check ReceivedERC20 event ---
         bytes32 expectedSig = keccak256("ReceivedERC20(address,uint256,address,uint256)");
@@ -367,11 +325,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
                     "ReceivedERC20.erc20Contract mismatch"
                 );
                 assertEq(uint256(logEntry.topics[2]), tokenId, "ReceivedERC20.toTokenId mismatch");
-                assertEq(
-                    address(uint160(uint256(logEntry.topics[3]))),
-                    alice,
-                    "ReceivedERC20.from mismatch"
-                );
+                assertEq(address(uint160(uint256(logEntry.topics[3]))), alice, "ReceivedERC20.from mismatch");
 
                 // data: amount
                 (uint256 amount) = abi.decode(logEntry.data, (uint256));
@@ -394,9 +348,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         assertEq(tokenId, mintingLimit);
 
-        bytes32 expectedSig = keccak256(
-            "GiftMinted(address,address,uint256,uint256)"
-        );
+        bytes32 expectedSig = keccak256("GiftMinted(address,address,uint256,uint256)");
         bool found;
 
         for (uint256 i; i < logs.length; ++i) {
@@ -405,19 +357,10 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
                 found = true;
 
                 // indexed: minter, recipient
-                assertEq(
-                    address(uint160(uint256(logEntry.topics[1]))),
-                    alice,
-                    "GiftMinted.minter mismatch"
-                );
-                assertEq(
-                    address(uint160(uint256(logEntry.topics[2]))),
-                    bob,
-                    "GiftMinted.recipient mismatch"
-                );
+                assertEq(address(uint160(uint256(logEntry.topics[1]))), alice, "GiftMinted.minter mismatch");
+                assertEq(address(uint160(uint256(logEntry.topics[2]))), bob, "GiftMinted.recipient mismatch");
 
-                (uint256 loggedTokenId, uint256 loggedPrice) =
-                    abi.decode(logEntry.data, (uint256, uint256));
+                (uint256 loggedTokenId, uint256 loggedPrice) = abi.decode(logEntry.data, (uint256, uint256));
                 assertEq(loggedTokenId, tokenId);
                 assertEq(loggedPrice, giftPrice);
             }
@@ -463,10 +406,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
     function testGiftMintRevertsWhenGiftMintingLimitReached() public {
         // Shrink giftMintingLimit to 1 so the second mint hits the limit
-        uint256 slot = _stdStore
-            .target(address(fraxiversarry))
-            .sig("giftMintingLimit()")
-            .find();
+        uint256 slot = _stdStore.target(address(fraxiversarry)).sig("giftMintingLimit()").find();
 
         vm.store(address(fraxiversarry), bytes32(slot), bytes32(uint256(1)));
 
@@ -554,7 +494,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         uint256 tokenId = _mintBaseWithWfrax(alice);
 
         uint256 preAliceFraxBalance = wfrax.balanceOf(alice);
-        uint256 preContractBalance  = wfrax.balanceOf(address(fraxiversarry));
+        uint256 preContractBalance = wfrax.balanceOf(address(fraxiversarry));
 
         vm.startPrank(alice);
         vm.recordLogs();
@@ -576,16 +516,8 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
                     address(wfrax),
                     "TransferredERC20.erc20Contract mismatch"
                 );
-                assertEq(
-                    uint256(logEntry.topics[2]),
-                    tokenId,
-                    "TransferredERC20.fromTokenId mismatch"
-                );
-                assertEq(
-                    address(uint160(uint256(logEntry.topics[3]))),
-                    alice,
-                    "TransferredERC20.to mismatch"
-                );
+                assertEq(uint256(logEntry.topics[2]), tokenId, "TransferredERC20.fromTokenId mismatch");
+                assertEq(address(uint160(uint256(logEntry.topics[3]))), alice, "TransferredERC20.to mismatch");
 
                 (uint256 amount) = abi.decode(logEntry.data, (uint256));
                 assertEq(amount, WFRAX_PRICE, "TransferredERC20.amount mismatch");
@@ -629,10 +561,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     // Fusing and unfusing
     // ----------------------------------------------------------
 
-    function _mintThreeDifferentBases(address minter)
-        internal
-        returns (uint256 t1, uint256 t2, uint256 t3)
-    {
+    function _mintThreeDifferentBases(address minter) internal returns (uint256 t1, uint256 t2, uint256 t3) {
         vm.startPrank(minter);
         wfrax.approve(address(fraxiversarry), WFRAX_PRICE);
         t1 = fraxiversarry.paidMint(address(wfrax));
@@ -656,9 +585,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         // Validate TokenFused event strictly
         // event TokenFused(address indexed owner, uint256 underlyingToken1, uint256 underlyingToken2, uint256 underlyingToken3, uint256 premiumTokenId);
-        bytes32 expectedSig = keccak256(
-            "TokenFused(address,uint256,uint256,uint256,uint256)"
-        );
+        bytes32 expectedSig = keccak256("TokenFused(address,uint256,uint256,uint256,uint256)");
 
         bool found;
         for (uint256 i; i < logs.length; ++i) {
@@ -668,28 +595,16 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
                 found = true;
 
                 // Indexed: owner
-                assertEq(
-                    address(uint160(uint256(logEntry.topics[1]))),
-                    alice,
-                    "TokenFused.owner mismatch"
-                );
+                assertEq(address(uint160(uint256(logEntry.topics[1]))), alice, "TokenFused.owner mismatch");
 
                 // Data: underlyingToken1, underlyingToken2, underlyingToken3, premiumTokenId
-                (
-                    uint256 underlying1,
-                    uint256 underlying2,
-                    uint256 underlying3,
-                    uint256 loggedPremiumId
-                ) = abi.decode(logEntry.data, (uint256, uint256, uint256, uint256));
+                (uint256 underlying1, uint256 underlying2, uint256 underlying3, uint256 loggedPremiumId) =
+                    abi.decode(logEntry.data, (uint256, uint256, uint256, uint256));
 
                 assertEq(underlying1, t1, "TokenFused.underlyingToken1 mismatch");
                 assertEq(underlying2, t2, "TokenFused.underlyingToken2 mismatch");
                 assertEq(underlying3, t3, "TokenFused.underlyingToken3 mismatch");
-                assertEq(
-                    loggedPremiumId,
-                    premiumId,
-                    "TokenFused.premiumTokenId mismatch"
-                );
+                assertEq(loggedPremiumId, premiumId, "TokenFused.premiumTokenId mismatch");
             }
         }
         assertTrue(found, "TokenFused event not found");
@@ -699,15 +614,10 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         // First premium token id should be mintingLimit + giftMintingLimit (62000)
         assertEq(premiumId, fraxiversarry.mintingLimit() + fraxiversarry.giftMintingLimit());
         assertEq(fraxiversarry.ownerOf(premiumId), alice);
-        assertEq(
-            uint256(fraxiversarry.tokenTypes(premiumId)),
-            uint256(Fraxiversarry.TokenType.FUSED)
-        );
+        assertEq(uint256(fraxiversarry.tokenTypes(premiumId)), uint256(Fraxiversarry.TokenType.FUSED));
 
         // underlyingTokenIds mapping
-        (uint256 u1, uint256 u2, uint256 u3) = fraxiversarry.getUnderlyingTokenIds(
-            premiumId
-        );
+        (uint256 u1, uint256 u2, uint256 u3) = fraxiversarry.getUnderlyingTokenIds(premiumId);
         assertEq(u1, t1);
         assertEq(u2, t2);
         assertEq(u3, t3);
@@ -718,8 +628,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         assertEq(fraxiversarry.ownerOf(t3), address(fraxiversarry));
 
         // getUnderlyingBalances on FUSED token proxies to underlying base tokens
-        (address[] memory erc20s, uint256[] memory balances) =
-            fraxiversarry.getUnderlyingBalances(premiumId);
+        (address[] memory erc20s, uint256[] memory balances) = fraxiversarry.getUnderlyingBalances(premiumId);
         assertEq(erc20s.length, 3);
         assertEq(balances.length, 3);
 
@@ -802,9 +711,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         // Validate TokenUnfused event
         // event TokenUnfused(address indexed owner, uint256 underlyingToken1, uint256 underlyingToken2, uint256 underlyingToken3, uint256 premiumTokenId);
-        bytes32 expectedSig = keccak256(
-            "TokenUnfused(address,uint256,uint256,uint256,uint256)"
-        );
+        bytes32 expectedSig = keccak256("TokenUnfused(address,uint256,uint256,uint256,uint256)");
         bool found;
         for (uint256 i; i < logs.length; ++i) {
             Vm.Log memory logEntry = logs[i];
@@ -813,28 +720,16 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
                 found = true;
 
                 // Indexed: owner
-                assertEq(
-                    address(uint160(uint256(logEntry.topics[1]))),
-                    alice,
-                    "TokenUnfused.owner mismatch"
-                );
+                assertEq(address(uint160(uint256(logEntry.topics[1]))), alice, "TokenUnfused.owner mismatch");
 
                 // Data: underlyingToken1, underlyingToken2, underlyingToken3, premiumTokenId
-                (
-                    uint256 underlying1,
-                    uint256 underlying2,
-                    uint256 underlying3,
-                    uint256 loggedPremiumId
-                ) = abi.decode(logEntry.data, (uint256, uint256, uint256, uint256));
+                (uint256 underlying1, uint256 underlying2, uint256 underlying3, uint256 loggedPremiumId) =
+                    abi.decode(logEntry.data, (uint256, uint256, uint256, uint256));
 
                 assertEq(underlying1, t1, "TokenUnfused.underlyingToken1 mismatch");
                 assertEq(underlying2, t2, "TokenUnfused.underlyingToken2 mismatch");
                 assertEq(underlying3, t3, "TokenUnfused.underlyingToken3 mismatch");
-                assertEq(
-                    loggedPremiumId,
-                    premiumId,
-                    "TokenUnfused.premiumTokenId mismatch"
-                );
+                assertEq(loggedPremiumId, premiumId, "TokenUnfused.premiumTokenId mismatch");
             }
         }
         assertTrue(found, "TokenUnfused event not found");
@@ -849,15 +744,10 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         // premium token burned
         vm.expectRevert();
         fraxiversarry.ownerOf(premiumId);
-        assertEq(
-            uint256(fraxiversarry.tokenTypes(premiumId)),
-            uint256(Fraxiversarry.TokenType.NONEXISTENT)
-        );
+        assertEq(uint256(fraxiversarry.tokenTypes(premiumId)), uint256(Fraxiversarry.TokenType.NONEXISTENT));
 
         // underlyingTokenIds cleared
-        (uint256 u1, uint256 u2, uint256 u3) = fraxiversarry.getUnderlyingTokenIds(
-            premiumId
-        );
+        (uint256 u1, uint256 u2, uint256 u3) = fraxiversarry.getUnderlyingTokenIds(premiumId);
         assertEq(u1, 0);
         assertEq(u2, 0);
         assertEq(u3, 0);
@@ -897,12 +787,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         fraxiversarry.unfuseTokens(premiumId);
 
         vm.prank(alice);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                bytes4(keccak256("ERC721NonexistentToken(uint256)")),
-                premiumId
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(bytes4(keccak256("ERC721NonexistentToken(uint256)")), premiumId));
         fraxiversarry.unfuseTokens(premiumId);
     }
 
@@ -1030,10 +915,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         // Change base URI for wFRAX
         vm.prank(owner);
-        fraxiversarry.setBaseAssetTokenUri(
-            address(wfrax),
-            "https://tba.fraxiversarry/wfrax-updated.json"
-        );
+        fraxiversarry.setBaseAssetTokenUri(address(wfrax), "https://tba.fraxiversarry/wfrax-updated.json");
 
         vm.recordLogs();
         vm.prank(owner);
@@ -1047,10 +929,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
             if (logEntry.topics[0] == expectedSig) {
                 found = true;
-                (uint256 fromId, uint256 toId) = abi.decode(
-                    logEntry.data,
-                    (uint256, uint256)
-                );
+                (uint256 fromId, uint256 toId) = abi.decode(logEntry.data, (uint256, uint256));
                 assertEq(fromId, t1, "BatchMetadataUpdate.fromId mismatch");
                 assertEq(toId, t2, "BatchMetadataUpdate.toId mismatch");
             }
@@ -1109,17 +988,12 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         // Also mint a soulbound in the premium range
         vm.startPrank(owner);
-        uint256 sbId = fraxiversarry.soulboundMint(
-            bob,
-            "https://premium.tba.fraxiversarry/soulbound.json"
-        );
-        fraxiversarry.setPremiumTokenUri(
-            "https://premium.tba.fraxiversarry/updated.json"
-        );
+        uint256 sbId = fraxiversarry.soulboundMint(bob, "https://premium.tba.fraxiversarry/soulbound.json");
+        fraxiversarry.setPremiumTokenUri("https://premium.tba.fraxiversarry/updated.json");
         vm.stopPrank();
 
         uint256 first = premiumId;
-        uint256 last  = sbId;
+        uint256 last = sbId;
 
         vm.recordLogs();
         vm.prank(owner);
@@ -1133,10 +1007,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
             if (logEntry.topics[0] == expectedSig) {
                 found = true;
-                (uint256 fromId, uint256 toId) = abi.decode(
-                    logEntry.data,
-                    (uint256, uint256)
-                );
+                (uint256 fromId, uint256 toId) = abi.decode(logEntry.data, (uint256, uint256));
                 assertEq(fromId, first, "BatchMetadataUpdate.fromId mismatch");
                 assertEq(toId, last, "BatchMetadataUpdate.toId mismatch");
             }
@@ -1144,16 +1015,10 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         assertTrue(found, "BatchMetadataUpdate event not found");
 
         // premium (fused) token should get updated URI
-        assertEq(
-            fraxiversarry.tokenURI(premiumId),
-            "https://premium.tba.fraxiversarry/updated.json"
-        );
+        assertEq(fraxiversarry.tokenURI(premiumId), "https://premium.tba.fraxiversarry/updated.json");
 
         // soulbound token has no underlyingTokenIds and must keep its original URI
-        assertEq(
-            fraxiversarry.tokenURI(sbId),
-            "https://premium.tba.fraxiversarry/soulbound.json"
-        );
+        assertEq(fraxiversarry.tokenURI(sbId), "https://premium.tba.fraxiversarry/soulbound.json");
     }
 
     function testRefreshPremiumTokenUrisRevertsIfRangeNotPremiumSpace() public {
@@ -1212,9 +1077,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         fraxiversarry.updateBaseAssetMintPrice(address(wfrax), 150e18);
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
-        bytes32 expectedSig = keccak256(
-            "MintPriceUpdated(address,uint256,uint256)"
-        );
+        bytes32 expectedSig = keccak256("MintPriceUpdated(address,uint256,uint256)");
 
         bool found;
         for (uint256 i; i < logs.length; ++i) {
@@ -1230,8 +1093,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
                     "MintPriceUpdated.erc20Contract mismatch"
                 );
 
-                (uint256 prevPrice, uint256 newPrice) =
-                    abi.decode(logEntry.data, (uint256, uint256));
+                (uint256 prevPrice, uint256 newPrice) = abi.decode(logEntry.data, (uint256, uint256));
                 assertEq(prevPrice, WFRAX_PRICE);
                 assertEq(newPrice, 150e18);
             }
@@ -1242,15 +1104,10 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     function testNewSoulboundTokenEvent() public {
         vm.recordLogs();
         vm.prank(owner);
-        uint256 sbId = fraxiversarry.soulboundMint(
-            alice,
-            "https://premium.tba.fraxiversarry/sb-event.json"
-        );
+        uint256 sbId = fraxiversarry.soulboundMint(alice, "https://premium.tba.fraxiversarry/sb-event.json");
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
-        bytes32 expectedSig = keccak256(
-            "NewSoulboundToken(address,uint256)"
-        );
+        bytes32 expectedSig = keccak256("NewSoulboundToken(address,uint256)");
 
         bool found;
         for (uint256 i; i < logs.length; ++i) {
@@ -1260,11 +1117,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
                 found = true;
 
                 // indexed tokenOwner
-                assertEq(
-                    address(uint160(uint256(logEntry.topics[1]))),
-                    alice,
-                    "NewSoulboundToken.tokenOwner mismatch"
-                );
+                assertEq(address(uint160(uint256(logEntry.topics[1]))), alice, "NewSoulboundToken.tokenOwner mismatch");
 
                 (uint256 loggedId) = abi.decode(logEntry.data, (uint256));
                 assertEq(loggedId, sbId, "NewSoulboundToken.tokenId mismatch");
@@ -1307,12 +1160,8 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         assertEq(u3, t3);
 
         // 2. Force underlyingTokenIds[premiumId][0] = 0 while keeping [1] == t2
-        uint256 slot0 = _stdStore
-            .target(address(fraxiversarry))
-            .sig("underlyingTokenIds(uint256,uint256)")
-            .with_key(premiumId)
-            .with_key(uint256(0))
-            .find();
+        uint256 slot0 = _stdStore.target(address(fraxiversarry)).sig("underlyingTokenIds(uint256,uint256)")
+            .with_key(premiumId).with_key(uint256(0)).find();
 
         vm.store(address(fraxiversarry), bytes32(slot0), bytes32(uint256(0)));
 
@@ -1332,22 +1181,19 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         fraxiversarry.refreshPremiumTokenUris(premiumId, premiumId);
 
         // The URI should still update even though index 0 is 0 and index 1 is not.
-        assertEq(
-            fraxiversarry.tokenURI(premiumId),
-            "https://premium.tba.fraxiversarry/hacked.json"
-        );
+        assertEq(fraxiversarry.tokenURI(premiumId), "https://premium.tba.fraxiversarry/hacked.json");
     }
 
     function testUpdateBaseAssetMintPriceRemovalHitsLoopBreak() public {
         // Start from known setup: 3 supported tokens
-        (address[] memory tokensBefore, ) = fraxiversarry.getSupportedErc20s();
+        (address[] memory tokensBefore,) = fraxiversarry.getSupportedErc20s();
         assertEq(tokensBefore.length, 3);
 
         // Remove the *middle* token, guaranteeing that we enter the loop and hit `break;`
         vm.prank(owner);
         fraxiversarry.updateBaseAssetMintPrice(address(sfrxusd), 0);
 
-        (address[] memory tokensAfter, ) = fraxiversarry.getSupportedErc20s();
+        (address[] memory tokensAfter,) = fraxiversarry.getSupportedErc20s();
         assertEq(tokensAfter.length, 2);
 
         // The remaining tokens should be wfrax and sfrxeth (order doesn’t matter)
@@ -1370,17 +1216,9 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         uint256 len = fraxiversarry.totalNumberOfSupportedErc20s();
         // Corrupt all supportedErc20s entries so none point to wfrax
         for (uint256 i; i < len; ++i) {
-            uint256 slot = _stdStore
-                .target(address(fraxiversarry))
-                .sig("supportedErc20s(uint256)")
-                .with_key(i)
-                .find();
+            uint256 slot = _stdStore.target(address(fraxiversarry)).sig("supportedErc20s(uint256)").with_key(i).find();
 
-            vm.store(
-                address(fraxiversarry),
-                bytes32(slot),
-                bytes32(uint256(uint160(address(0xDEAD))))
-            );
+            vm.store(address(fraxiversarry), bytes32(slot), bytes32(uint256(uint160(address(0xDEAD)))));
         }
 
         // Now removing wfrax (setting price to 0) should hit UnsupportedToken guard
@@ -1405,8 +1243,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         for (uint256 i; i < logs.length; ++i) {
             if (logs[i].topics[0] == expectedSig) {
                 found = true;
-                (uint256 prev, uint256 updated) =
-                    abi.decode(logs[i].data, (uint256, uint256));
+                (uint256 prev, uint256 updated) = abi.decode(logs[i].data, (uint256, uint256));
                 assertEq(prev, oldPrice);
                 assertEq(updated, newPrice);
             }
@@ -1449,10 +1286,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         vm.prank(owner);
         fraxiversarry.refreshGiftTokenUris(giftId, giftId);
 
-        assertEq(
-            fraxiversarry.tokenURI(giftId),
-            "https://gift.tba.fraxiversarry/new.json"
-        );
+        assertEq(fraxiversarry.tokenURI(giftId), "https://gift.tba.fraxiversarry/new.json");
     }
 
     function testSetGiftTokenUriOnlyOwner() public {
@@ -1588,37 +1422,22 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         sfrxusd.mint(address(fraxiversarry), 123);
 
         // 2) Set erc20Balances[tokenId][sfrxusd] = 123
-        uint256 balanceSlot = _stdStore
-            .target(address(fraxiversarry))
-            .sig("erc20Balances(uint256,address)")
-            .with_key(tokenId)
-            .with_key(address(sfrxusd))
-            .find();
+        uint256 balanceSlot = _stdStore.target(address(fraxiversarry)).sig("erc20Balances(uint256,address)")
+            .with_key(tokenId).with_key(address(sfrxusd)).find();
 
         vm.store(address(fraxiversarry), bytes32(balanceSlot), bytes32(uint256(123)));
 
         // 3) Increase numberOfTokenUnderlyingAssets to 2
-        uint256 numSlot = _stdStore
-            .target(address(fraxiversarry))
-            .sig("numberOfTokenUnderlyingAssets(uint256)")
-            .with_key(tokenId)
-            .find();
+        uint256 numSlot = _stdStore.target(address(fraxiversarry)).sig("numberOfTokenUnderlyingAssets(uint256)")
+            .with_key(tokenId).find();
 
         vm.store(address(fraxiversarry), bytes32(numSlot), bytes32(uint256(2)));
 
         // 4) Set underlyingAssets[tokenId][1] = sfrxusd
-        uint256 underlyingSlot1 = _stdStore
-            .target(address(fraxiversarry))
-            .sig("underlyingAssets(uint256,uint256)")
-            .with_key(tokenId)
-            .with_key(uint256(1))
-            .find();
+        uint256 underlyingSlot1 = _stdStore.target(address(fraxiversarry)).sig("underlyingAssets(uint256,uint256)")
+            .with_key(tokenId).with_key(uint256(1)).find();
 
-        vm.store(
-            address(fraxiversarry),
-            bytes32(underlyingSlot1),
-            bytes32(uint256(uint160(address(sfrxusd))))
-        );
+        vm.store(address(fraxiversarry), bytes32(underlyingSlot1), bytes32(uint256(uint160(address(sfrxusd)))));
 
         assertEq(fraxiversarry.erc20TransferOutNonce(tokenId), 0);
 
@@ -1630,7 +1449,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     }
 
     function testFuseTokensWithRepeatedTokenIdReverts() public {
-        (uint256 t1, , uint256 t3) = _mintThreeDifferentBases(alice);
+        (uint256 t1,, uint256 t3) = _mintThreeDifferentBases(alice);
 
         vm.prank(alice);
         vm.expectRevert(SameTokenUnderlyingAssets.selector);

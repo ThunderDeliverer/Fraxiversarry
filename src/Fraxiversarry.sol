@@ -15,7 +15,7 @@ import {IERC6454} from "./interfaces/IERC6454.sol";
 import {IERC7590} from "./interfaces/IERC7590.sol";
 import {IERC4906} from "openzeppelin-contracts/contracts/interfaces/IERC4906.sol";
 
-contract Fraxiversarry is 
+contract Fraxiversarry is
     ERC721,
     ERC721Enumerable,
     ERC721URIStorage,
@@ -59,10 +59,7 @@ contract Fraxiversarry is
     string private giftTokenUri;
     string private premiumTokenUri;
 
-    constructor(address initialOwner)
-        ERC721("Fraxiversarry", "FRAX5Y")
-        Ownable(initialOwner)
-    {
+    constructor(address initialOwner) ERC721("Fraxiversarry", "FRAX5Y") Ownable(initialOwner) {
         mintingLimit = 12_000;
         giftMintingLimit = 50_000;
         giftMintingPrice = 50 * 1e18; // 50 WFRAX
@@ -128,7 +125,7 @@ contract Fraxiversarry is
         return tokenId;
     }
 
-    function soulboundMint(address recipient, string memory tokenUri) public onlyOwner returns (uint256){
+    function soulboundMint(address recipient, string memory tokenUri) public onlyOwner returns (uint256) {
         uint256 tokenId = nextPremiumTokenId;
 
         _safeMint(recipient, tokenId);
@@ -148,8 +145,10 @@ contract Fraxiversarry is
         if (msg.sender != ownerOf(tokenId)) revert OnlyTokenOwnerCanBurnTheToken();
         if (tokenTypes[tokenId] == TokenType.FUSED) revert UnfuseTokenBeforeBurning();
         // Transfer out the held ERC20 and then burn the NFT
-        for (uint256 i; i < numberOfTokenUnderlyingAssets[tokenId]; ) {
-            _transferHeldERC20FromToken(underlyingAssets[tokenId][i], tokenId, msg.sender, erc20Balances[tokenId][underlyingAssets[tokenId][i]]);
+        for (uint256 i; i < numberOfTokenUnderlyingAssets[tokenId];) {
+            _transferHeldERC20FromToken(
+                underlyingAssets[tokenId][i], tokenId, msg.sender, erc20Balances[tokenId][underlyingAssets[tokenId][i]]
+            );
 
             unchecked {
                 ++i;
@@ -176,7 +175,7 @@ contract Fraxiversarry is
         if (lastTokenId < firstTokenId) revert InvalidRange();
         if (lastTokenId >= nextTokenId) revert OutOfBounds();
 
-        for (uint256 tokenId = firstTokenId; tokenId <= lastTokenId; ) {
+        for (uint256 tokenId = firstTokenId; tokenId <= lastTokenId;) {
             address underlyingAsset = underlyingAssets[tokenId][0];
 
             // Only update if there is an underlying asset (if the token exists)
@@ -197,7 +196,7 @@ contract Fraxiversarry is
         if (lastTokenId < firstTokenId) revert InvalidRange();
         if (lastTokenId >= nextGiftTokenId) revert OutOfBounds();
 
-        for (uint256 tokenId = firstTokenId; tokenId <= lastTokenId; ) {
+        for (uint256 tokenId = firstTokenId; tokenId <= lastTokenId;) {
             // Only update if there is an underlying asset (if the token exists)
             if (erc20Balances[tokenId][WFRAX_ADDRESS] > 0) {
                 _setTokenURI(tokenId, giftTokenUri);
@@ -216,9 +215,10 @@ contract Fraxiversarry is
         if (firstTokenId < mintingLimit + giftMintingLimit) revert OutOfBounds();
         if (lastTokenId >= nextPremiumTokenId) revert OutOfBounds();
 
-        for (uint256 tokenId = firstTokenId; tokenId <= lastTokenId; ) {
+        for (uint256 tokenId = firstTokenId; tokenId <= lastTokenId;) {
             // Only update if the token has underlying tokens (this ensures that the token exists and that it isn't soulbound)
             if (underlyingTokenIds[tokenId][0] != 0 || underlyingTokenIds[tokenId][1] != 0) { // This is in case the first underlying token ID is 0
+
                 _setTokenURI(tokenId, premiumTokenUri);
             }
 
@@ -250,7 +250,7 @@ contract Fraxiversarry is
         if (mintPrice == 0) {
             uint256 erc20Index = type(uint256).max;
 
-            for (uint i; i < totalNumberOfSupportedErc20s; ) {
+            for (uint256 i; i < totalNumberOfSupportedErc20s;) {
                 if (supportedErc20s[i] == erc20Contract) {
                     erc20Index = i;
                     break;
@@ -283,18 +283,22 @@ contract Fraxiversarry is
         emit GiftMintPriceUpdated(previousPrice, newPrice);
     }
 
-    function getUnderlyingTokenIds(uint256 premiumTokenId) external view
-        returns(uint256 tokenId1, uint256 tokenId2, uint256 tokenId3)
+    function getUnderlyingTokenIds(uint256 premiumTokenId)
+        external
+        view
+        returns (uint256 tokenId1, uint256 tokenId2, uint256 tokenId3)
     {
-        return(
+        return (
             underlyingTokenIds[premiumTokenId][0],
             underlyingTokenIds[premiumTokenId][1],
             underlyingTokenIds[premiumTokenId][2]
         );
     }
 
-    function getUnderlyingBalances(uint256 tokenId) external view
-        returns(address[] memory erc20Contracts, uint256[] memory balances)
+    function getUnderlyingBalances(uint256 tokenId)
+        external
+        view
+        returns (address[] memory erc20Contracts, uint256[] memory balances)
     {
         if (tokenTypes[tokenId] == TokenType.NONEXISTENT) revert TokenDoesNotExist();
         if (tokenTypes[tokenId] == TokenType.SOULBOUND) return (new address[](0), new uint256[](0));
@@ -313,7 +317,7 @@ contract Fraxiversarry is
         erc20Contracts = new address[](3);
         balances = new uint256[](3);
 
-        for (uint256 i; i < 3; ) {
+        for (uint256 i; i < 3;) {
             uint256 underlyingTokenId = underlyingTokenIds[tokenId][i];
             address erc20Contract = underlyingAssets[underlyingTokenId][0];
             erc20Contracts[i] = erc20Contract;
@@ -327,13 +331,15 @@ contract Fraxiversarry is
         return (erc20Contracts, balances);
     }
 
-    function getSupportedErc20s() external view
+    function getSupportedErc20s()
+        external
+        view
         returns (address[] memory erc20Contracts, uint256[] memory mintPricesOut)
     {
         erc20Contracts = new address[](totalNumberOfSupportedErc20s);
         mintPricesOut = new uint256[](totalNumberOfSupportedErc20s);
 
-        for (uint256 i; i < totalNumberOfSupportedErc20s; ) {
+        for (uint256 i; i < totalNumberOfSupportedErc20s;) {
             address erc20Contract = supportedErc20s[i];
             erc20Contracts[i] = erc20Contract;
             mintPricesOut[i] = mintPrices[erc20Contract];
@@ -366,12 +372,11 @@ contract Fraxiversarry is
         revert TokensCanOnlyBeRetrievedByNftBurn();
     }
 
-    function transferERC20ToToken(
-        address erc20Contract,
-        uint256 tokenId,
-        uint256 amount,
-        bytes memory data
-    ) external pure override {
+    function transferERC20ToToken(address erc20Contract, uint256 tokenId, uint256 amount, bytes memory data)
+        external
+        pure
+        override
+    {
         revert TokensCanOnlyBeDepositedByNftMint();
     }
 
@@ -380,22 +385,19 @@ contract Fraxiversarry is
     }
 
     function fuseTokens(uint256 tokenId1, uint256 tokenId2, uint256 tokenId3) public returns (uint256 premiumTokenId) {
-        if (
-            ownerOf(tokenId1) != msg.sender ||
-            ownerOf(tokenId2) != msg.sender ||
-            ownerOf(tokenId3) != msg.sender
-        ) revert OnlyTokenOwnerCanFuseTokens();
+        if (ownerOf(tokenId1) != msg.sender || ownerOf(tokenId2) != msg.sender || ownerOf(tokenId3) != msg.sender) {
+            revert OnlyTokenOwnerCanFuseTokens();
+        }
 
         if (
-            tokenTypes[tokenId1] != TokenType.BASE ||
-            tokenTypes[tokenId2] != TokenType.BASE ||
-            tokenTypes[tokenId3] != TokenType.BASE
+            tokenTypes[tokenId1] != TokenType.BASE || tokenTypes[tokenId2] != TokenType.BASE
+                || tokenTypes[tokenId3] != TokenType.BASE
         ) revert CanOnlyFuseBaseTokens();
 
         if (
-            underlyingAssets[tokenId1][0] == underlyingAssets[tokenId2][0] ||
-            underlyingAssets[tokenId1][0] == underlyingAssets[tokenId3][0] ||
-            underlyingAssets[tokenId2][0] == underlyingAssets[tokenId3][0]
+            underlyingAssets[tokenId1][0] == underlyingAssets[tokenId2][0]
+                || underlyingAssets[tokenId1][0] == underlyingAssets[tokenId3][0]
+                || underlyingAssets[tokenId2][0] == underlyingAssets[tokenId3][0]
         ) revert SameTokenUnderlyingAssets();
 
         premiumTokenId = nextPremiumTokenId;
@@ -419,8 +421,13 @@ contract Fraxiversarry is
         emit TokenFused(msg.sender, tokenId1, tokenId2, tokenId3, premiumTokenId);
     }
 
-    function unfuseTokens(uint256 premiumTokenId) public returns (uint256 tokenId1, uint256 tokenId2, uint256 tokenId3) {
-        if (ownerOf(premiumTokenId) != msg.sender) revert OnlyTokenOwnerCanUnfuseTokens();
+    function unfuseTokens(uint256 premiumTokenId)
+        public
+        returns (uint256 tokenId1, uint256 tokenId2, uint256 tokenId3)
+    {
+        if (ownerOf(premiumTokenId) != msg.sender) {
+            revert OnlyTokenOwnerCanUnfuseTokens();
+        }
         if (tokenTypes[premiumTokenId] != TokenType.FUSED) revert CanOnlyUnfuseFusedTokens();
 
         tokenId1 = underlyingTokenIds[premiumTokenId][0];
@@ -449,46 +456,32 @@ contract Fraxiversarry is
 
     // ********** Internal functions to facilitate the ERC7590 functionality **********
 
-    function _transferHeldERC20FromToken(
-        address erc20Contract,
-        uint256 tokenId,
-        address to,
-        uint256 amount
-    ) internal {
+    function _transferHeldERC20FromToken(address erc20Contract, uint256 tokenId, address to, uint256 amount) internal {
         IERC20 token = IERC20(erc20Contract);
 
-        if(erc20Balances[tokenId][erc20Contract] < amount) revert InsufficientBalance();
+        if (erc20Balances[tokenId][erc20Contract] < amount) revert InsufficientBalance();
 
         erc20Balances[tokenId][erc20Contract] -= amount;
         transferOutNonces[tokenId]++;
 
-        if(!token.transfer(to, amount)) revert TransferFailed();
+        if (!token.transfer(to, amount)) revert TransferFailed();
 
         emit TransferredERC20(erc20Contract, tokenId, to, amount);
     }
 
-    function _transferERC20ToToken(
-        address erc20Contract,
-        uint256 tokenId,
-        address from
-    ) internal {
+    function _transferERC20ToToken(address erc20Contract, uint256 tokenId, address from) internal {
         uint256 price = mintPrices[erc20Contract];
 
         _transferERC20ToToken(erc20Contract, tokenId, from, price);
     }
 
-    function _transferERC20ToToken(
-        address erc20Contract,
-        uint256 tokenId,
-        address from,
-        uint256 amount
-    ) internal {
+    function _transferERC20ToToken(address erc20Contract, uint256 tokenId, address from, uint256 amount) internal {
         IERC20 token = IERC20(erc20Contract);
 
-        if(token.allowance(from, address(this)) < amount) revert InsufficientAllowance();
-        if(token.balanceOf(from) < amount) revert InsufficientBalance();
+        if (token.allowance(from, address(this)) < amount) revert InsufficientAllowance();
+        if (token.balanceOf(from) < amount) revert InsufficientBalance();
 
-        if(!token.transferFrom(from, address(this), amount)) revert TransferFailed();
+        if (!token.transferFrom(from, address(this), amount)) revert TransferFailed();
 
         erc20Balances[tokenId][erc20Contract] += amount;
 
@@ -506,10 +499,7 @@ contract Fraxiversarry is
         return super._update(to, tokenId, auth);
     }
 
-    function _increaseBalance(address account, uint128 value)
-        internal
-        override(ERC721, ERC721Enumerable)
-    {
+    function _increaseBalance(address account, uint128 value) internal override(ERC721, ERC721Enumerable) {
         super._increaseBalance(account, value);
     }
 
@@ -518,12 +508,7 @@ contract Fraxiversarry is
         emit MetadataUpdate(tokenId);
     }
 
-    function tokenURI(uint256 tokenId)
-        public
-        view
-        override(ERC721, ERC721URIStorage)
-        returns (string memory)
-    {
+    function tokenURI(uint256 tokenId) public view override(ERC721, ERC721URIStorage) returns (string memory) {
         return super.tokenURI(tokenId);
     }
 
@@ -533,10 +518,7 @@ contract Fraxiversarry is
         override(ERC721, ERC721Enumerable, ERC721URIStorage)
         returns (bool)
     {
-        return
-            super.supportsInterface(interfaceId) ||
-            interfaceId == type(IERC7590).interfaceId ||
-            interfaceId == type(IERC6454).interfaceId ||
-            interfaceId == type(IERC4906).interfaceId;
+        return super.supportsInterface(interfaceId) || interfaceId == type(IERC7590).interfaceId
+            || interfaceId == type(IERC6454).interfaceId || interfaceId == type(IERC4906).interfaceId;
     }
 }
