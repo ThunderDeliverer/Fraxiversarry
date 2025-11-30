@@ -217,7 +217,8 @@ contract Fraxiversarry is
 
         for (uint256 tokenId = firstTokenId; tokenId <= lastTokenId;) {
             // Only update if the token has underlying tokens (this ensures that the token exists and that it isn't soulbound)
-            if (underlyingTokenIds[tokenId][0] != 0 || underlyingTokenIds[tokenId][1] != 0) { // This is in case the first underlying token ID is 0
+            if (underlyingTokenIds[tokenId][0] != 0 || underlyingTokenIds[tokenId][1] != 0) {
+                // This is in case the first underlying token ID is 0
 
                 _setTokenURI(tokenId, premiumTokenUri);
             }
