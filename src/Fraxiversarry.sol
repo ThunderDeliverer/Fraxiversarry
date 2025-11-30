@@ -287,12 +287,13 @@ contract Fraxiversarry is
     function getUnderlyingTokenIds(uint256 premiumTokenId)
         external
         view
-        returns (uint256 tokenId1, uint256 tokenId2, uint256 tokenId3)
+        returns (uint256 tokenId1, uint256 tokenId2, uint256 tokenId3, uint256 tokenId4)
     {
         return (
             underlyingTokenIds[premiumTokenId][0],
             underlyingTokenIds[premiumTokenId][1],
-            underlyingTokenIds[premiumTokenId][2]
+            underlyingTokenIds[premiumTokenId][2],
+            underlyingTokenIds[premiumTokenId][3]
         );
     }
 
@@ -315,10 +316,10 @@ contract Fraxiversarry is
             return (erc20Contracts, balances);
         }
 
-        erc20Contracts = new address[](3);
-        balances = new uint256[](3);
+        erc20Contracts = new address[](4);
+        balances = new uint256[](4);
 
-        for (uint256 i; i < 3;) {
+        for (uint256 i; i < 4;) {
             uint256 underlyingTokenId = underlyingTokenIds[tokenId][i];
             address erc20Contract = underlyingAssets[underlyingTokenId][0];
             erc20Contracts[i] = erc20Contract;
@@ -385,20 +386,27 @@ contract Fraxiversarry is
         return transferOutNonces[tokenId];
     }
 
-    function fuseTokens(uint256 tokenId1, uint256 tokenId2, uint256 tokenId3) public returns (uint256 premiumTokenId) {
-        if (ownerOf(tokenId1) != msg.sender || ownerOf(tokenId2) != msg.sender || ownerOf(tokenId3) != msg.sender) {
-            revert OnlyTokenOwnerCanFuseTokens();
-        }
+    function fuseTokens(uint256 tokenId1, uint256 tokenId2, uint256 tokenId3, uint256 tokenId4)
+        public
+        returns (uint256 premiumTokenId)
+    {
+        if (
+            ownerOf(tokenId1) != msg.sender || ownerOf(tokenId2) != msg.sender || ownerOf(tokenId3) != msg.sender
+                || ownerOf(tokenId4) != msg.sender
+        ) revert OnlyTokenOwnerCanFuseTokens();
 
         if (
             tokenTypes[tokenId1] != TokenType.BASE || tokenTypes[tokenId2] != TokenType.BASE
-                || tokenTypes[tokenId3] != TokenType.BASE
+                || tokenTypes[tokenId3] != TokenType.BASE || tokenTypes[tokenId4] != TokenType.BASE
         ) revert CanOnlyFuseBaseTokens();
 
         if (
             underlyingAssets[tokenId1][0] == underlyingAssets[tokenId2][0]
                 || underlyingAssets[tokenId1][0] == underlyingAssets[tokenId3][0]
+                || underlyingAssets[tokenId1][0] == underlyingAssets[tokenId4][0]
                 || underlyingAssets[tokenId2][0] == underlyingAssets[tokenId3][0]
+                || underlyingAssets[tokenId2][0] == underlyingAssets[tokenId4][0]
+                || underlyingAssets[tokenId3][0] == underlyingAssets[tokenId4][0]
         ) revert SameTokenUnderlyingAssets();
 
         premiumTokenId = nextPremiumTokenId;
@@ -406,6 +414,7 @@ contract Fraxiversarry is
         _update(address(this), tokenId1, msg.sender);
         _update(address(this), tokenId2, msg.sender);
         _update(address(this), tokenId3, msg.sender);
+        _update(address(this), tokenId4, msg.sender);
 
         _safeMint(msg.sender, premiumTokenId);
         _setTokenURI(premiumTokenId, premiumTokenUri);
@@ -414,17 +423,17 @@ contract Fraxiversarry is
         underlyingTokenIds[premiumTokenId][0] = tokenId1;
         underlyingTokenIds[premiumTokenId][1] = tokenId2;
         underlyingTokenIds[premiumTokenId][2] = tokenId3;
-
+        underlyingTokenIds[premiumTokenId][3] = tokenId4;
         tokenTypes[premiumTokenId] = TokenType.FUSED;
 
         nextPremiumTokenId += 1;
 
-        emit TokenFused(msg.sender, tokenId1, tokenId2, tokenId3, premiumTokenId);
+        emit TokenFused(msg.sender, tokenId1, tokenId2, tokenId3, tokenId4, premiumTokenId);
     }
 
     function unfuseTokens(uint256 premiumTokenId)
         public
-        returns (uint256 tokenId1, uint256 tokenId2, uint256 tokenId3)
+        returns (uint256 tokenId1, uint256 tokenId2, uint256 tokenId3, uint256 tokenId4)
     {
         if (ownerOf(premiumTokenId) != msg.sender) {
             revert OnlyTokenOwnerCanUnfuseTokens();
@@ -434,6 +443,7 @@ contract Fraxiversarry is
         tokenId1 = underlyingTokenIds[premiumTokenId][0];
         tokenId2 = underlyingTokenIds[premiumTokenId][1];
         tokenId3 = underlyingTokenIds[premiumTokenId][2];
+        tokenId4 = underlyingTokenIds[premiumTokenId][3];
 
         _burn(premiumTokenId);
         tokenTypes[premiumTokenId] = TokenType.NONEXISTENT;
@@ -441,12 +451,13 @@ contract Fraxiversarry is
         underlyingTokenIds[premiumTokenId][0] = 0;
         underlyingTokenIds[premiumTokenId][1] = 0;
         underlyingTokenIds[premiumTokenId][2] = 0;
+        underlyingTokenIds[premiumTokenId][3] = 0;
 
         _update(msg.sender, tokenId1, address(this));
         _update(msg.sender, tokenId2, address(this));
         _update(msg.sender, tokenId3, address(this));
-
-        emit TokenUnfused(msg.sender, tokenId1, tokenId2, tokenId3, premiumTokenId);
+        _update(msg.sender, tokenId4, address(this));
+        emit TokenUnfused(msg.sender, tokenId1, tokenId2, tokenId3, tokenId4, premiumTokenId);
     }
 
     // ********** Internal functions to facilitate the ERC6454 functionality **********

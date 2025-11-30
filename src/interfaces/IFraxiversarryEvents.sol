@@ -15,6 +15,7 @@ contract IFraxiversarryEvents {
         uint256 underlyingToken1,
         uint256 underlyingToken2,
         uint256 underlyingToken3,
+        uint256 underlyingToken4,
         uint256 premiumTokenId
     );
 
@@ -23,6 +24,7 @@ contract IFraxiversarryEvents {
         uint256 underlyingToken1,
         uint256 underlyingToken2,
         uint256 underlyingToken3,
+        uint256 underlyingToken4,
         uint256 premiumTokenId
     );
 }

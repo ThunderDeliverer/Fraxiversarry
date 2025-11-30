@@ -25,6 +25,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     MockERC20 wfrax;
     MockERC20 sfrxusd;
     MockERC20 sfrxeth;
+    MockERC20 fpi;
 
     address owner = address(0xA11CE);
     address alice = address(0xB0B);
@@ -33,6 +34,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     uint256 constant WFRAX_PRICE = 100e18;
     uint256 constant SFRXUSD_PRICE = 200e18;
     uint256 constant SFRXETH_PRICE = 300e18;
+    uint256 constant FPI_PRICE = 400e18;
 
     event BatchMetadataUpdate(uint256 _fromTokenId, uint256 _toTokenId);
 
@@ -47,6 +49,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         wfrax = new MockERC20("Wrapped FRAX", "wFRAX");
         sfrxusd = new MockERC20("Staked Frax USD", "sfrxUSD");
         sfrxeth = new MockERC20("Staked Frax ETH", "sfrxETH");
+        fpi = new MockERC20("Frax Price Index", "FPI");
 
         // Deploy Fraxiversarry with a dedicated owner
         fraxiversarry = new Fraxiversarry(owner);
@@ -60,16 +63,19 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         wfrax.mint(alice, 1e22);
         sfrxusd.mint(alice, 1e22);
         sfrxeth.mint(alice, 1e22);
+        fpi.mint(alice, 1e22);
 
         // Owner sets mint prices and URIs
         vm.startPrank(owner);
         fraxiversarry.updateBaseAssetMintPrice(address(wfrax), WFRAX_PRICE);
         fraxiversarry.updateBaseAssetMintPrice(address(sfrxusd), SFRXUSD_PRICE);
         fraxiversarry.updateBaseAssetMintPrice(address(sfrxeth), SFRXETH_PRICE);
+        fraxiversarry.updateBaseAssetMintPrice(address(fpi), FPI_PRICE);
 
         fraxiversarry.setBaseAssetTokenUri(address(wfrax), "https://tba.fraxiversarry/wfrax.json");
         fraxiversarry.setBaseAssetTokenUri(address(sfrxusd), "https://tba.fraxiversarry/sfrxusd.json");
         fraxiversarry.setBaseAssetTokenUri(address(sfrxeth), "https://tba.fraxiversarry/sfrxeth.json");
+        fraxiversarry.setBaseAssetTokenUri(address(fpi), "https://tba.fraxiversarry/fpi.json");
         vm.stopPrank();
     }
 
@@ -101,17 +107,19 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     // ----------------------------------------------------------
 
     function testUpdateBaseAssetMintPriceAddAndRemove() public {
-        // wFRAX, sfrxUSD, sfrxETH were already set in setUp()
+        // wFRAX, sfrxUSD, sfrxETH, FPI were already set in setUp()
 
         // Check getSupportedErc20s
         (address[] memory tokens, uint256[] memory prices) = fraxiversarry.getSupportedErc20s();
-        assertEq(tokens.length, 3);
+        assertEq(tokens.length, 4);
         assertEq(tokens[0], address(wfrax));
         assertEq(tokens[1], address(sfrxusd));
         assertEq(tokens[2], address(sfrxeth));
+        assertEq(tokens[3], address(fpi));
         assertEq(prices[0], WFRAX_PRICE);
         assertEq(prices[1], SFRXUSD_PRICE);
         assertEq(prices[2], SFRXETH_PRICE);
+        assertEq(prices[3], FPI_PRICE);
 
         // Change price for wFRAX
         vm.prank(owner);
@@ -123,10 +131,11 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         fraxiversarry.updateBaseAssetMintPrice(address(sfrxusd), 0);
 
         (tokens, prices) = fraxiversarry.getSupportedErc20s();
-        assertEq(tokens.length, 2);
+        assertEq(tokens.length, 3);
         // Order is not guaranteed; just assert contents
         bool foundWfrax = false;
         bool foundSfrxeth = false;
+        bool foundFpi = false;
         for (uint256 i; i < tokens.length; ++i) {
             if (tokens[i] == address(wfrax)) {
                 foundWfrax = true;
@@ -136,9 +145,14 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
                 foundSfrxeth = true;
                 assertEq(prices[i], SFRXETH_PRICE);
             }
+            if (tokens[i] == address(fpi)) {
+                foundFpi = true;
+                assertEq(prices[i], FPI_PRICE);
+            }
         }
         assertTrue(foundWfrax);
         assertTrue(foundSfrxeth);
+        assertTrue(foundFpi);
 
         // supportedErc20s[lastIndex] should be zeroed
         assertEq(fraxiversarry.supportedErc20s(fraxiversarry.totalNumberOfSupportedErc20s()), address(0));
@@ -442,10 +456,11 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     }
 
     function testGetUnderlyingTokenIdsForNeverFusedReturnsZeros() public {
-        (uint256 a, uint256 b, uint256 c) = fraxiversarry.getUnderlyingTokenIds(999999);
+        (uint256 a, uint256 b, uint256 c, uint256 d) = fraxiversarry.getUnderlyingTokenIds(999999);
         assertEq(a, 0);
         assertEq(b, 0);
         assertEq(c, 0);
+        assertEq(d, 0);
     }
 
     // ----------------------------------------------------------
@@ -561,8 +576,9 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     // Fusing and unfusing
     // ----------------------------------------------------------
 
-    function _mintThreeDifferentBases(address minter) internal returns (uint256 t1, uint256 t2, uint256 t3) {
+    function _mintFourDifferentBases(address minter) internal returns (uint256 t1, uint256 t2, uint256 t3, uint256 t4) {
         vm.startPrank(minter);
+
         wfrax.approve(address(fraxiversarry), WFRAX_PRICE);
         t1 = fraxiversarry.paidMint(address(wfrax));
 
@@ -571,21 +587,25 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         sfrxeth.approve(address(fraxiversarry), SFRXETH_PRICE);
         t3 = fraxiversarry.paidMint(address(sfrxeth));
+
+        fpi.approve(address(fraxiversarry), FPI_PRICE);
+        t4 = fraxiversarry.paidMint(address(fpi));
+
         vm.stopPrank();
     }
 
     function testFuseTokensHappyPath() public {
-        (uint256 t1, uint256 t2, uint256 t3) = _mintThreeDifferentBases(alice);
+        (uint256 t1, uint256 t2, uint256 t3, uint256 t4) = _mintFourDifferentBases(alice);
 
         // Record all logs emitted during fuse
         vm.recordLogs();
         vm.prank(alice);
-        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3);
+        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3, t4);
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
-        // Validate TokenFused event strictly
-        // event TokenFused(address indexed owner, uint256 underlyingToken1, uint256 underlyingToken2, uint256 underlyingToken3, uint256 premiumTokenId);
-        bytes32 expectedSig = keccak256("TokenFused(address,uint256,uint256,uint256,uint256)");
+        // event TokenFused(address indexed owner, uint256 underlyingToken1, uint256 underlyingToken2,
+        //                  uint256 underlyingToken3, uint256 underlyingToken4, uint256 premiumTokenId);
+        bytes32 expectedSig = keccak256("TokenFused(address,uint256,uint256,uint256,uint256,uint256)");
 
         bool found;
         for (uint256 i; i < logs.length; ++i) {
@@ -597,13 +617,19 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
                 // Indexed: owner
                 assertEq(address(uint160(uint256(logEntry.topics[1]))), alice, "TokenFused.owner mismatch");
 
-                // Data: underlyingToken1, underlyingToken2, underlyingToken3, premiumTokenId
-                (uint256 underlying1, uint256 underlying2, uint256 underlying3, uint256 loggedPremiumId) =
-                    abi.decode(logEntry.data, (uint256, uint256, uint256, uint256));
+                // Data: underlyingToken1..4, premiumTokenId
+                (
+                    uint256 underlying1,
+                    uint256 underlying2,
+                    uint256 underlying3,
+                    uint256 underlying4,
+                    uint256 loggedPremiumId
+                ) = abi.decode(logEntry.data, (uint256, uint256, uint256, uint256, uint256));
 
                 assertEq(underlying1, t1, "TokenFused.underlyingToken1 mismatch");
                 assertEq(underlying2, t2, "TokenFused.underlyingToken2 mismatch");
                 assertEq(underlying3, t3, "TokenFused.underlyingToken3 mismatch");
+                assertEq(underlying4, t4, "TokenFused.underlyingToken4 mismatch");
                 assertEq(loggedPremiumId, premiumId, "TokenFused.premiumTokenId mismatch");
             }
         }
@@ -611,107 +637,109 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         // ---- State checks ----
 
-        // First premium token id should be mintingLimit + giftMintingLimit (62000)
         assertEq(premiumId, fraxiversarry.mintingLimit() + fraxiversarry.giftMintingLimit());
         assertEq(fraxiversarry.ownerOf(premiumId), alice);
         assertEq(uint256(fraxiversarry.tokenTypes(premiumId)), uint256(Fraxiversarry.TokenType.FUSED));
 
         // underlyingTokenIds mapping
-        (uint256 u1, uint256 u2, uint256 u3) = fraxiversarry.getUnderlyingTokenIds(premiumId);
+        (uint256 u1, uint256 u2, uint256 u3, uint256 u4) = fraxiversarry.getUnderlyingTokenIds(premiumId);
         assertEq(u1, t1);
         assertEq(u2, t2);
         assertEq(u3, t3);
+        assertEq(u4, t4);
 
         // Base tokens are now held by the contract
         assertEq(fraxiversarry.ownerOf(t1), address(fraxiversarry));
         assertEq(fraxiversarry.ownerOf(t2), address(fraxiversarry));
         assertEq(fraxiversarry.ownerOf(t3), address(fraxiversarry));
+        assertEq(fraxiversarry.ownerOf(t4), address(fraxiversarry));
 
         // getUnderlyingBalances on FUSED token proxies to underlying base tokens
         (address[] memory erc20s, uint256[] memory balances) = fraxiversarry.getUnderlyingBalances(premiumId);
-        assertEq(erc20s.length, 3);
-        assertEq(balances.length, 3);
+        assertEq(erc20s.length, 4);
+        assertEq(balances.length, 4);
 
-        // Order should match t1, t2, t3 => wFRAX, sfrxUSD, sfrxETH
+        // Order should match t1..t4 => wFRAX, sfrxUSD, sfrxETH, FPI
         assertEq(erc20s[0], address(wfrax));
         assertEq(erc20s[1], address(sfrxusd));
         assertEq(erc20s[2], address(sfrxeth));
+        assertEq(erc20s[3], address(fpi));
         assertEq(balances[0], WFRAX_PRICE);
         assertEq(balances[1], SFRXUSD_PRICE);
         assertEq(balances[2], SFRXETH_PRICE);
+        assertEq(balances[3], FPI_PRICE);
     }
 
     function testFuseTokensRevertsIfNotOwnerOfAll() public {
-        (uint256 t1, uint256 t2, uint256 t3) = _mintThreeDifferentBases(alice);
+        (uint256 t1, uint256 t2, uint256 t3, uint256 t4) = _mintFourDifferentBases(alice);
 
         // Transfer one token to bob
         vm.prank(alice);
-        fraxiversarry.transferFrom(alice, bob, t3);
+        fraxiversarry.transferFrom(alice, bob, t4);
 
         vm.prank(alice);
         vm.expectRevert(OnlyTokenOwnerCanFuseTokens.selector);
-        fraxiversarry.fuseTokens(t1, t2, t3);
+        fraxiversarry.fuseTokens(t1, t2, t3, t4);
     }
 
     function testFuseTokensRevertsIfNotBaseType() public {
-        // First three base tokens
-        (uint256 t1, uint256 t2, uint256 t3) = _mintThreeDifferentBases(alice);
+        // First four base tokens
+        (uint256 t1, uint256 t2, uint256 t3, uint256 t4) = _mintFourDifferentBases(alice);
 
         // Fuse them into a premium token
         vm.prank(alice);
-        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3);
+        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3, t4);
 
-        // Mint two additional base NFTs for alice (t4, t5)
+        // Mint three additional base NFTs for alice (t5, t6, t7)
         vm.startPrank(alice);
         wfrax.approve(address(fraxiversarry), WFRAX_PRICE);
-        uint256 t4 = fraxiversarry.paidMint(address(wfrax));
+        uint256 t5 = fraxiversarry.paidMint(address(wfrax));
 
         sfrxusd.approve(address(fraxiversarry), SFRXUSD_PRICE);
-        uint256 t5 = fraxiversarry.paidMint(address(sfrxusd));
+        uint256 t6 = fraxiversarry.paidMint(address(sfrxusd));
+
+        sfrxeth.approve(address(fraxiversarry), SFRXETH_PRICE);
+        uint256 t7 = fraxiversarry.paidMint(address(sfrxeth));
         vm.stopPrank();
 
-        // Sanity: alice owns premiumId, t4, t5
-        assertEq(fraxiversarry.ownerOf(premiumId), alice);
-        assertEq(fraxiversarry.ownerOf(t4), alice);
-        assertEq(fraxiversarry.ownerOf(t5), alice);
-
-        // premiumId is FUSED, t4/t5 are BASE -> should revert with CanOnlyFuseBaseTokens
+        // premiumId is FUSED, others are BASE -> should revert with CanOnlyFuseBaseTokens
         vm.prank(alice);
         vm.expectRevert(CanOnlyFuseBaseTokens.selector);
-        fraxiversarry.fuseTokens(premiumId, t4, t5);
+        fraxiversarry.fuseTokens(premiumId, t5, t6, t7);
     }
 
     function testFuseTokensRevertsIfAnyUnderlyingAssetDuplicates() public {
-        // Mint three base tokens all with same underlying asset (wFRAX)
+        // Mint four base tokens all with same underlying asset (wFRAX)
         vm.prank(owner);
         fraxiversarry.updateBaseAssetMintPrice(address(sfrxusd), WFRAX_PRICE);
 
         vm.startPrank(alice);
-        wfrax.approve(address(fraxiversarry), WFRAX_PRICE * 3);
+        wfrax.approve(address(fraxiversarry), WFRAX_PRICE * 4);
         uint256 t1 = fraxiversarry.paidMint(address(wfrax));
         uint256 t2 = fraxiversarry.paidMint(address(wfrax));
         uint256 t3 = fraxiversarry.paidMint(address(wfrax));
+        uint256 t4 = fraxiversarry.paidMint(address(wfrax));
         vm.stopPrank();
 
         vm.prank(alice);
         vm.expectRevert(SameTokenUnderlyingAssets.selector);
-        fraxiversarry.fuseTokens(t1, t2, t3);
+        fraxiversarry.fuseTokens(t1, t2, t3, t4);
     }
 
     function testUnfuseTokensHappyPath() public {
-        (uint256 t1, uint256 t2, uint256 t3) = _mintThreeDifferentBases(alice);
+        (uint256 t1, uint256 t2, uint256 t3, uint256 t4) = _mintFourDifferentBases(alice);
 
         vm.prank(alice);
-        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3);
+        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3, t4);
 
         vm.recordLogs();
         vm.prank(alice);
-        (uint256 r1, uint256 r2, uint256 r3) = fraxiversarry.unfuseTokens(premiumId);
+        (uint256 r1, uint256 r2, uint256 r3, uint256 r4) = fraxiversarry.unfuseTokens(premiumId);
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
-        // Validate TokenUnfused event
-        // event TokenUnfused(address indexed owner, uint256 underlyingToken1, uint256 underlyingToken2, uint256 underlyingToken3, uint256 premiumTokenId);
-        bytes32 expectedSig = keccak256("TokenUnfused(address,uint256,uint256,uint256,uint256)");
+        // event TokenUnfused(address indexed owner, uint256 underlyingToken1, uint256 underlyingToken2,
+        //                    uint256 underlyingToken3, uint256 underlyingToken4, uint256 premiumTokenId);
+        bytes32 expectedSig = keccak256("TokenUnfused(address,uint256,uint256,uint256,uint256,uint256)");
         bool found;
         for (uint256 i; i < logs.length; ++i) {
             Vm.Log memory logEntry = logs[i];
@@ -719,27 +747,30 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
             if (logEntry.topics[0] == expectedSig) {
                 found = true;
 
-                // Indexed: owner
                 assertEq(address(uint160(uint256(logEntry.topics[1]))), alice, "TokenUnfused.owner mismatch");
 
-                // Data: underlyingToken1, underlyingToken2, underlyingToken3, premiumTokenId
-                (uint256 underlying1, uint256 underlying2, uint256 underlying3, uint256 loggedPremiumId) =
-                    abi.decode(logEntry.data, (uint256, uint256, uint256, uint256));
+                (
+                    uint256 underlying1,
+                    uint256 underlying2,
+                    uint256 underlying3,
+                    uint256 underlying4,
+                    uint256 loggedPremiumId
+                ) = abi.decode(logEntry.data, (uint256, uint256, uint256, uint256, uint256));
 
                 assertEq(underlying1, t1, "TokenUnfused.underlyingToken1 mismatch");
                 assertEq(underlying2, t2, "TokenUnfused.underlyingToken2 mismatch");
                 assertEq(underlying3, t3, "TokenUnfused.underlyingToken3 mismatch");
+                assertEq(underlying4, t4, "TokenUnfused.underlyingToken4 mismatch");
                 assertEq(loggedPremiumId, premiumId, "TokenUnfused.premiumTokenId mismatch");
             }
         }
         assertTrue(found, "TokenUnfused event not found");
 
-        // ---- State assertions ----
-
         // Returned IDs
         assertEq(r1, t1);
         assertEq(r2, t2);
         assertEq(r3, t3);
+        assertEq(r4, t4);
 
         // premium token burned
         vm.expectRevert();
@@ -747,22 +778,24 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         assertEq(uint256(fraxiversarry.tokenTypes(premiumId)), uint256(Fraxiversarry.TokenType.NONEXISTENT));
 
         // underlyingTokenIds cleared
-        (uint256 u1, uint256 u2, uint256 u3) = fraxiversarry.getUnderlyingTokenIds(premiumId);
+        (uint256 u1, uint256 u2, uint256 u3, uint256 u4) = fraxiversarry.getUnderlyingTokenIds(premiumId);
         assertEq(u1, 0);
         assertEq(u2, 0);
         assertEq(u3, 0);
+        assertEq(u4, 0);
 
         // Base tokens returned to user
         assertEq(fraxiversarry.ownerOf(t1), alice);
         assertEq(fraxiversarry.ownerOf(t2), alice);
         assertEq(fraxiversarry.ownerOf(t3), alice);
+        assertEq(fraxiversarry.ownerOf(t4), alice);
     }
 
     function testUnfuseTokensRevertsIfNotOwner() public {
-        (uint256 t1, uint256 t2, uint256 t3) = _mintThreeDifferentBases(alice);
+        (uint256 t1, uint256 t2, uint256 t3, uint256 t4) = _mintFourDifferentBases(alice);
 
         vm.prank(alice);
-        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3);
+        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3, t4);
 
         vm.prank(bob);
         vm.expectRevert(OnlyTokenOwnerCanUnfuseTokens.selector);
@@ -778,10 +811,10 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     }
 
     function testUnfuseTokensTwiceReverts() public {
-        (uint256 t1, uint256 t2, uint256 t3) = _mintThreeDifferentBases(alice);
+        (uint256 t1, uint256 t2, uint256 t3, uint256 t4) = _mintFourDifferentBases(alice);
 
         vm.prank(alice);
-        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3);
+        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3, t4);
 
         vm.prank(alice);
         fraxiversarry.unfuseTokens(premiumId);
@@ -792,9 +825,9 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     }
 
     function testBurnRevertsForFusedToken() public {
-        (uint256 t1, uint256 t2, uint256 t3) = _mintThreeDifferentBases(alice);
+        (uint256 t1, uint256 t2, uint256 t3, uint256 t4) = _mintFourDifferentBases(alice);
         vm.prank(alice);
-        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3);
+        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3, t4);
 
         vm.prank(alice);
         vm.expectRevert(UnfuseTokenBeforeBurning.selector);
@@ -980,10 +1013,10 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     }
 
     function testRefreshPremiumTokenUrisOnlyUpdatesFusedTokens() public {
-        (uint256 t1, uint256 t2, uint256 t3) = _mintThreeDifferentBases(alice);
+        (uint256 t1, uint256 t2, uint256 t3, uint256 t4) = _mintFourDifferentBases(alice);
 
         vm.startPrank(alice);
-        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3);
+        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3, t4);
         vm.stopPrank();
 
         // Also mint a soulbound in the premium range
@@ -1034,10 +1067,10 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     }
 
     function testRefreshPremiumTokenUrisRevertsWhenLastOutOfBounds() public {
-        (uint256 t1, uint256 t2, uint256 t3) = _mintThreeDifferentBases(alice);
+        (uint256 t1, uint256 t2, uint256 t3, uint256 t4) = _mintFourDifferentBases(alice);
 
         vm.prank(alice);
-        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3);
+        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3, t4);
 
         // _nextPremiumTokenId is now premiumId + 1; choose last >= _nextPremiumTokenId
         uint256 last = premiumId + 5;
@@ -1147,66 +1180,64 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     }
 
     function testRefreshPremiumTokenUrisWhenFirstUnderlyingIdZeroButSecondNonZero() public {
-        // 1. Create a proper fused token
-        (uint256 t1, uint256 t2, uint256 t3) = _mintThreeDifferentBases(alice);
+        (uint256 t1, uint256 t2, uint256 t3, uint256 t4) = _mintFourDifferentBases(alice);
 
         vm.prank(alice);
-        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3);
+        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3, t4);
 
-        // Sanity: normal state
-        (uint256 u1, uint256 u2, uint256 u3) = fraxiversarry.getUnderlyingTokenIds(premiumId);
+        (uint256 u1, uint256 u2, uint256 u3, uint256 u4) = fraxiversarry.getUnderlyingTokenIds(premiumId);
         assertEq(u1, t1);
         assertEq(u2, t2);
         assertEq(u3, t3);
+        assertEq(u4, t4);
 
-        // 2. Force underlyingTokenIds[premiumId][0] = 0 while keeping [1] == t2
+        // Force index 0 to 0
         uint256 slot0 = _stdStore.target(address(fraxiversarry)).sig("underlyingTokenIds(uint256,uint256)")
             .with_key(premiumId).with_key(uint256(0)).find();
 
         vm.store(address(fraxiversarry), bytes32(slot0), bytes32(uint256(0)));
 
-        // Verify our hacked state: first = 0, second != 0
-        (u1, u2, u3) = fraxiversarry.getUnderlyingTokenIds(premiumId);
-        // getUnderlyingTokenIds returns directly from storage, so u1 should now be 0
+        (u1, u2, u3, u4) = fraxiversarry.getUnderlyingTokenIds(premiumId);
         assertEq(u1, 0);
         assertEq(u2, t2);
         assertEq(u3, t3);
+        assertEq(u4, t4);
 
-        // 3. Change global premium URI
         vm.prank(owner);
         fraxiversarry.setPremiumTokenUri("https://premium.tba.fraxiversarry/hacked.json");
 
-        // 4. Call refreshPremiumTokenUris on just this token
         vm.prank(owner);
         fraxiversarry.refreshPremiumTokenUris(premiumId, premiumId);
 
-        // The URI should still update even though index 0 is 0 and index 1 is not.
         assertEq(fraxiversarry.tokenURI(premiumId), "https://premium.tba.fraxiversarry/hacked.json");
     }
 
     function testUpdateBaseAssetMintPriceRemovalHitsLoopBreak() public {
-        // Start from known setup: 3 supported tokens
+        // Start from known setup: 4 supported tokens
         (address[] memory tokensBefore,) = fraxiversarry.getSupportedErc20s();
-        assertEq(tokensBefore.length, 3);
+        assertEq(tokensBefore.length, 4);
 
         // Remove the *middle* token, guaranteeing that we enter the loop and hit `break;`
         vm.prank(owner);
         fraxiversarry.updateBaseAssetMintPrice(address(sfrxusd), 0);
 
         (address[] memory tokensAfter,) = fraxiversarry.getSupportedErc20s();
-        assertEq(tokensAfter.length, 2);
+        assertEq(tokensAfter.length, 3);
 
-        // The remaining tokens should be wfrax and sfrxeth (order doesn’t matter)
+        // The remaining tokens should be wfrax, sfrxeth, and fpi (order doesn’t matter)
         bool foundWfrax;
         bool foundSfrxeth;
+        bool foundFpi;
 
         for (uint256 i; i < tokensAfter.length; ++i) {
             if (tokensAfter[i] == address(wfrax)) foundWfrax = true;
             if (tokensAfter[i] == address(sfrxeth)) foundSfrxeth = true;
+            if (tokensAfter[i] == address(fpi)) foundFpi = true;
         }
 
         assertTrue(foundWfrax);
         assertTrue(foundSfrxeth);
+        assertTrue(foundFpi);
     }
 
     function testUpdateBaseAssetMintPriceRemovalDefensiveGuard() public {
@@ -1397,9 +1428,9 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         assertFalse(fraxiversarry.isTransferable(sbId, alice, bob));
 
         // FUSED
-        (uint256 t1, uint256 t2, uint256 t3) = _mintThreeDifferentBases(alice);
+        (uint256 t1, uint256 t2, uint256 t3, uint256 t4) = _mintFourDifferentBases(alice);
         vm.prank(alice);
-        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3);
+        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3, t4);
         assertTrue(fraxiversarry.isTransferable(premiumId, alice, bob));
 
         // Burned BASE token: mapping flag is false, so still returns true
@@ -1449,11 +1480,11 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     }
 
     function testFuseTokensWithRepeatedTokenIdReverts() public {
-        (uint256 t1,, uint256 t3) = _mintThreeDifferentBases(alice);
+        (uint256 t1, uint256 t2, uint256 t3,) = _mintFourDifferentBases(alice);
 
         vm.prank(alice);
         vm.expectRevert(SameTokenUnderlyingAssets.selector);
-        fraxiversarry.fuseTokens(t1, t1, t3);
+        fraxiversarry.fuseTokens(t1, t1, t2, t3);
     }
 
     function testTokenURIRevertsForBurnedToken() public {
