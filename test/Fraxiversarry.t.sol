@@ -1523,9 +1523,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 error ERC721EnumerableForbiddenBatchMint();
 
 contract FraxiversarryInternalHarness is Fraxiversarry {
-    constructor(address initialOwner, address lzEndpoint)
-        Fraxiversarry(initialOwner, lzEndpoint)
-    {}
+    constructor(address initialOwner, address lzEndpoint) Fraxiversarry(initialOwner, lzEndpoint) {}
 
     // Existing helpers
     function exposedIncreaseBalance(address account, uint128 value) external {

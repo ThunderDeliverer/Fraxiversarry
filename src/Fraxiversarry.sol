@@ -21,8 +21,6 @@ import {ONFTComposeMsgCodec} from "@layerzerolabs/onft-evm/contracts/libs/ONFTCo
 import {IOAppMsgInspector} from "@layerzerolabs/oapp-evm/contracts/oapp/interfaces/IOAppMsgInspector.sol";
 import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 
-import {console} from "forge-std/Console.sol";
-
 contract Fraxiversarry is
     ERC721,
     ERC721Enumerable,
@@ -535,7 +533,14 @@ contract Fraxiversarry is
         _isBridgeOperation = false;
     }
 
-    function _debit(address from, uint256 tokenId, uint32 /*dstEid*/) internal override {
+    function _debit(
+        address from,
+        uint256 tokenId,
+        uint32 /*dstEid*/
+    )
+        internal
+        override
+    {
         address owner = ownerOf(tokenId);
 
         if (from != owner && !isApprovedForAll(owner, from) && getApproved(tokenId) != from) {
@@ -545,7 +550,14 @@ contract Fraxiversarry is
         _bridgeBurn(owner, tokenId);
     }
 
-    function _credit(address to, uint256 tokenId, uint32 /*srcEid*/) internal override {
+    function _credit(
+        address to,
+        uint256 tokenId,
+        uint32 /*srcEid*/
+    )
+        internal
+        override
+    {
         if (_ownerOf(tokenId) != address(0)) revert TokenAlreadyExists(tokenId);
 
         _isBridgeOperation = true;
@@ -560,13 +572,14 @@ contract Fraxiversarry is
         returns (bytes memory message, bytes memory options)
     {
         if (sendParam.to == bytes32(0)) revert InvalidReceiver();
-console.log("buildMsgAndOptions called");
+
         string memory tokenUri = tokenURI(sendParam.tokenId);
         bool isSoulbound = isNonTransferrable[sendParam.tokenId];
         bytes memory composedMessage = abi.encode(tokenUri, isSoulbound);
 
-        if (isSoulbound && sendParam.to.bytes32ToAddress() != ownerOf(sendParam.tokenId))
+        if (isSoulbound && sendParam.to.bytes32ToAddress() != ownerOf(sendParam.tokenId)) {
             revert CannotTransferSoulboundToken();
+        }
 
         bool hasCompose;
         (message, hasCompose) = ONFT721MsgCodec.encode(sendParam.to, sendParam.tokenId, composedMessage);
@@ -578,13 +591,7 @@ console.log("buildMsgAndOptions called");
         if (inspector != address(0)) IOAppMsgInspector(inspector).inspect(message, options);
     }
 
-    function _lzReceive(
-        Origin calldata origin,
-        bytes32 guid,
-        bytes calldata message,
-        address /*_executor*/,
-        bytes calldata /*_extraData*/
-    )
+    function _lzReceive(Origin calldata origin, bytes32 guid, bytes calldata message, address, bytes calldata)
         internal
         override
     {
@@ -614,11 +621,7 @@ console.log("buildMsgAndOptions called");
         bytes memory composeInnerMsg = abi.encode(tokenUri, isSoulbound);
         bytes memory composeMsg = abi.encodePacked(composeFrom, composeInnerMsg);
 
-        bytes memory composedMsgEncoded = ONFTComposeMsgCodec.encode(
-            origin.nonce,
-            origin.srcEid,
-            composeMsg
-        );
+        bytes memory composedMsgEncoded = ONFTComposeMsgCodec.encode(origin.nonce, origin.srcEid, composeMsg);
         endpoint.sendCompose(toAddress, guid, 0, composedMsgEncoded);
 
         emit ONFTReceived(guid, origin.srcEid, toAddress, tokenId);

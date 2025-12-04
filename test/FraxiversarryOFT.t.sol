@@ -24,16 +24,14 @@ contract NoopLzEndpoint {
     event ComposeSent(address indexed to, bytes32 indexed guid, uint256 value, bytes message);
 
     // Needed by OAppCore constructor: endpoint.setDelegate(address)
-    function setDelegate(address /*delegate*/) external {
+    function setDelegate(
+        address /*delegate*/
+    )
+        external {
         // no-op
     }
 
-    function sendCompose(
-        address to,
-        bytes32 guid,
-        uint256 value,
-        bytes calldata message
-    ) external {
+    function sendCompose(address to, bytes32 guid, uint256 value, bytes calldata message) external {
         // Do NOT revert – just log the compose message
         emit ComposeSent(to, guid, value, message);
     }
@@ -47,7 +45,7 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
     using ONFT721MsgCodec for bytes;
     using ONFT721MsgCodec for bytes32;
 
-    FraxiversarryONFTHarness internal fraxiversarry;    // source chain
+    FraxiversarryONFTHarness internal fraxiversarry; // source chain
     FraxiversarryONFTHarness internal fraxDst; // destination chain
     ONFT721MsgCodecHarness internal codecHarness;
     MockLzEndpoint internal endpoint;
@@ -56,7 +54,7 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
 
     address internal owner = address(this);
     address internal alice = address(0xB0B);
-    address internal bob   = address(0xC0C);
+    address internal bob = address(0xC0C);
 
     uint256 constant WFRAX_PRICE = 100e18;
 
@@ -98,11 +96,7 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
     }
 
     function _origin(uint32 srcEid) internal pure returns (Origin memory o) {
-        o = Origin({
-            srcEid: srcEid,
-            sender: bytes32(uint256(uint160(address(0xCAFE)))),
-            nonce: 1
-        });
+        o = Origin({srcEid: srcEid, sender: bytes32(uint256(uint160(address(0xCAFE)))), nonce: 1});
     }
 
     // ------------------------------------------------------
@@ -113,7 +107,7 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
         uint256 tokenId = _mintBase(alice);
 
         uint256 contractBalBefore = wfrax.balanceOf(address(fraxiversarry));
-        uint256 storedBalBefore   = fraxiversarry.balanceOfERC20(address(wfrax), tokenId);
+        uint256 storedBalBefore = fraxiversarry.balanceOfERC20(address(wfrax), tokenId);
 
         fraxiversarry.exposedBridgeBurn(alice, tokenId);
 
@@ -123,7 +117,7 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
 
         // Underlying ERC20s must remain locked and accounted
         uint256 contractBalAfter = wfrax.balanceOf(address(fraxiversarry));
-        uint256 storedBalAfter   = fraxiversarry.balanceOfERC20(address(wfrax), tokenId);
+        uint256 storedBalAfter = fraxiversarry.balanceOfERC20(address(wfrax), tokenId);
 
         assertEq(contractBalAfter, contractBalBefore, "bridge burn must not move ERC20s");
         assertEq(storedBalAfter, storedBalBefore, "internal ERC20 balance must remain");
@@ -208,11 +202,11 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
         uint256 tokenId = _mintBase(alice);
 
         SendParam memory sp;
-        sp.dstEid       = 2;
-        sp.to           = bytes32(uint256(uint160(alice)));
-        sp.tokenId      = tokenId; // must exist – underlying implementation calls tokenURI()
+        sp.dstEid = 2;
+        sp.to = bytes32(uint256(uint160(alice)));
+        sp.tokenId = tokenId; // must exist – underlying implementation calls tokenURI()
         sp.extraOptions = abi.encode("my-options");
-        sp.composeMsg   = abi.encode("ignored-in-contract"); // contract builds its own compose payload
+        sp.composeMsg = abi.encode("ignored-in-contract"); // contract builds its own compose payload
 
         (bytes memory msgData, bytes memory opts) = fraxiversarry.exposedBuildMsgAndOptions(sp);
 
@@ -225,8 +219,8 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
         uint256 tokenId = _mintBase(alice);
 
         SendParam memory sp;
-        sp.dstEid  = 2;
-        sp.to      = bytes32(0); // invalid receiver
+        sp.dstEid = 2;
+        sp.to = bytes32(0); // invalid receiver
         sp.tokenId = tokenId;
 
         vm.expectRevert(InvalidReceiver.selector);
@@ -250,11 +244,11 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
 
         // Build ONFT message using the source contract's own builder
         SendParam memory sp;
-        sp.dstEid       = 10;
-        sp.to           = bytes32(uint256(uint160(recipientOnDst)));
-        sp.tokenId      = tokenId;
+        sp.dstEid = 10;
+        sp.to = bytes32(uint256(uint160(recipientOnDst)));
+        sp.tokenId = tokenId;
         sp.extraOptions = bytes("");
-        sp.composeMsg   = bytes(""); // ignored in contract
+        sp.composeMsg = bytes(""); // ignored in contract
 
         (bytes memory msgData,) = fraxiversarry.exposedBuildMsgAndOptions(sp);
 
@@ -275,10 +269,7 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
         // After receive, token must exist on destination and be owned by recipient
         assertEq(fraxDst.ownerOf(tokenId), recipientOnDst, "bridged token owner mismatch");
         assertEq(fraxDst.tokenURI(tokenId), uri, "bridged token URI mismatch");
-        assertFalse(
-            fraxDst.exposedIsNonTransferrable(tokenId),
-            "bridged BASE token must not be soulbound"
-        );
+        assertFalse(fraxDst.exposedIsNonTransferrable(tokenId), "bridged BASE token must not be soulbound");
 
         // Check ONFTReceived + ComposeSent events on destination chain
         // Check ONFTReceived event on destination chain
@@ -305,21 +296,17 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
 
         // Build send params
         SendParam memory sp;
-        sp.dstEid       = 10;
-        sp.to           = bytes32(uint256(uint160(alice)));
-        sp.tokenId      = sbId;
+        sp.dstEid = 10;
+        sp.to = bytes32(uint256(uint160(alice)));
+        sp.tokenId = sbId;
         sp.extraOptions = bytes("");
-        sp.composeMsg   = bytes(""); // ignored
+        sp.composeMsg = bytes(""); // ignored
 
         (bytes memory msgData,) = fraxiversarry.exposedBuildMsgAndOptions(sp);
 
         // Decode ONFT wrapper via codec harness
-        (
-            address decodedTo,
-            uint256 decodedId,
-            bool hasCompose,
-            bytes memory composeBlob
-        ) = codecHarness.decodeAll(msgData);
+        (address decodedTo, uint256 decodedId, bool hasCompose, bytes memory composeBlob) =
+            codecHarness.decodeAll(msgData);
 
         assertEq(decodedTo, alice, "sendTo mismatch");
         assertEq(decodedId, sbId, "tokenId mismatch");
@@ -350,7 +337,7 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
         Origin memory o = _origin(1);
         bytes32 guid = keccak256("guid-no-inspector");
         bytes memory payload = abi.encode("hello");
-        bytes memory opts    = abi.encode("opts");
+        bytes memory opts = abi.encode("opts");
 
         vm.expectRevert();
         fraxiversarry.exposedLzReceive(o, guid, payload, address(this), opts);
@@ -380,8 +367,7 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
 
         // Build an ONFT message with hasCompose == false
         bytes32 to = bytes32(uint256(uint160(recipientOnDst)));
-        (bytes memory msgData, bool hasCompose) =
-            ONFT721MsgCodec.encode(to, tokenId, bytes("")); // empty composeMsg
+        (bytes memory msgData, bool hasCompose) = ONFT721MsgCodec.encode(to, tokenId, bytes("")); // empty composeMsg
 
         assertFalse(hasCompose, "expected hasCompose == false");
 
@@ -412,8 +398,7 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
         bytes memory composeBlob = abi.encodePacked(fromOApp, truncated);
 
         bytes32 to = bytes32(uint256(uint160(recipientOnDst)));
-        (bytes memory msgData,) =
-            ONFT721MsgCodec.encode(to, tokenId, composeBlob);
+        (bytes memory msgData,) = ONFT721MsgCodec.encode(to, tokenId, composeBlob);
 
         Origin memory o = _origin(10);
         bytes32 guid = keccak256("lzReceiveMalformed");
@@ -428,21 +413,17 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
 
         // Build send params in memory (fine for tests)
         SendParam memory sp;
-        sp.dstEid       = 10;
-        sp.to           = bytes32(uint256(uint160(bob)));
-        sp.tokenId      = tokenId;
+        sp.dstEid = 10;
+        sp.to = bytes32(uint256(uint160(bob)));
+        sp.tokenId = tokenId;
         sp.extraOptions = bytes("");
-        sp.composeMsg   = bytes(""); // ignored by contract
+        sp.composeMsg = bytes(""); // ignored by contract
 
         (bytes memory msgData,) = fraxiversarry.exposedBuildMsgAndOptions(sp);
 
         // Decode with ONFT721MsgCodec via the harness
-        (
-            address decodedTo,
-            uint256 decodedId,
-            bool hasCompose,
-            bytes memory composeBlob
-        ) = codecHarness.decodeAll(msgData);
+        (address decodedTo, uint256 decodedId, bool hasCompose, bytes memory composeBlob) =
+            codecHarness.decodeAll(msgData);
 
         assertEq(decodedTo, bob, "sendTo mismatch");
         assertEq(decodedId, tokenId, "tokenId mismatch");
@@ -473,8 +454,8 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
         assertTrue(fraxiversarry.exposedIsNonTransferrable(sbId));
 
         SendParam memory sp;
-        sp.dstEid  = 10;
-        sp.to      = bytes32(uint256(uint160(bob))); // not the owner
+        sp.dstEid = 10;
+        sp.to = bytes32(uint256(uint160(bob))); // not the owner
         sp.tokenId = sbId;
 
         vm.expectRevert(CannotTransferSoulboundToken.selector);
@@ -487,9 +468,7 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
 /// ----------------------------------------------------------
 
 contract FraxiversarryONFTHarness is Fraxiversarry {
-    constructor(address initialOwner, address lzEndpoint)
-        Fraxiversarry(initialOwner, lzEndpoint)
-    {}
+    constructor(address initialOwner, address lzEndpoint) Fraxiversarry(initialOwner, lzEndpoint) {}
 
     function exposedIncreaseBalance(address account, uint128 value) external {
         _increaseBalance(account, value);
@@ -543,18 +522,13 @@ contract ONFT721MsgCodecHarness {
     function decodeAll(bytes calldata msgData)
         external
         pure
-        returns (
-            address to,
-            uint256 tokenId,
-            bool hasCompose,
-            bytes memory composeBlob
-        )
+        returns (address to, uint256 tokenId, bool hasCompose, bytes memory composeBlob)
     {
         bytes32 toBytes = ONFT721MsgCodec.sendTo(msgData);
         to = address(uint160(uint256(toBytes)));
 
-        tokenId     = ONFT721MsgCodec.tokenId(msgData);
-        hasCompose  = ONFT721MsgCodec.isComposed(msgData);
+        tokenId = ONFT721MsgCodec.tokenId(msgData);
+        hasCompose = ONFT721MsgCodec.isComposed(msgData);
         composeBlob = ONFT721MsgCodec.composeMsg(msgData);
     }
 }

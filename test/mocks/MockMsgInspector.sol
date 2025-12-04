@@ -12,12 +12,7 @@ contract MockMsgInspector is IOAppMsgInspector {
         shouldPass = _shouldPass;
     }
 
-    function inspect(bytes calldata _message, bytes calldata _options)
-        external
-        view
-        override
-        returns (bool valid)
-    {
+    function inspect(bytes calldata _message, bytes calldata _options) external view override returns (bool valid) {
         // silence unused variable warnings if you don't use them
         _message;
         _options;
