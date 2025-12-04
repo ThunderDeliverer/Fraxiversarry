@@ -7,7 +7,6 @@ import {ERC721Burnable} from "openzeppelin-contracts/contracts/token/ERC721/exte
 import {ERC721Enumerable} from "openzeppelin-contracts/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import {ERC721Pausable} from "openzeppelin-contracts/contracts/token/ERC721/extensions/ERC721Pausable.sol";
 import {ERC721URIStorage} from "openzeppelin-contracts/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
-import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
 
 import {IFraxiversarryErrors} from "./interfaces/IFraxiversarryErrors.sol";
 import {IFraxiversarryEvents} from "./interfaces/IFraxiversarryEvents.sol";
@@ -15,18 +14,30 @@ import {IERC6454} from "./interfaces/IERC6454.sol";
 import {IERC7590} from "./interfaces/IERC7590.sol";
 import {IERC4906} from "openzeppelin-contracts/contracts/interfaces/IERC4906.sol";
 
+import {ONFT721Core} from "@layerzerolabs/onft-evm/contracts/onft721/ONFT721Core.sol";
+import {IONFT721, SendParam} from "@layerzerolabs/onft-evm/contracts/onft721/interfaces/IONFT721.sol";
+import {ONFT721MsgCodec} from "@layerzerolabs/onft-evm/contracts/onft721/libs/ONFT721MsgCodec.sol";
+import {ONFTComposeMsgCodec} from "@layerzerolabs/onft-evm/contracts/libs/ONFTComposeMsgCodec.sol";
+import {IOAppMsgInspector} from "@layerzerolabs/oapp-evm/contracts/oapp/interfaces/IOAppMsgInspector.sol";
+import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
+
+import {console} from "forge-std/Console.sol";
+
 contract Fraxiversarry is
     ERC721,
     ERC721Enumerable,
     ERC721URIStorage,
     ERC721Pausable,
-    Ownable,
     ERC721Burnable,
     IERC6454,
     IERC7590,
     IFraxiversarryErrors,
-    IFraxiversarryEvents
+    IFraxiversarryEvents,
+    ONFT721Core
 {
+    using ONFT721MsgCodec for bytes;
+    using ONFT721MsgCodec for bytes32;
+
     address public constant WFRAX_ADDRESS = 0xFc00000000000000000000000000000000000002;
 
     mapping(address erc20 => uint256 price) public mintPrices;
@@ -48,6 +59,8 @@ contract Fraxiversarry is
     uint256 public giftMintingLimit;
     uint256 public giftMintingPrice;
 
+    bool private _isBridgeOperation;
+
     enum TokenType {
         NONEXISTENT, // 0 - Token does not exist
         BASE, // 1 - NFTs that are minted using ERC20 tokens
@@ -59,7 +72,10 @@ contract Fraxiversarry is
     string private giftTokenUri;
     string private premiumTokenUri;
 
-    constructor(address initialOwner) ERC721("Fraxiversarry", "FRAX5Y") Ownable(initialOwner) {
+    constructor(address initialOwner, address lzEndpoint)
+        ERC721("Fraxiversarry", "FRAX5Y")
+        ONFT721Core(lzEndpoint, initialOwner)
+    {
         mintingLimit = 12_000;
         giftMintingLimit = 50_000;
         giftMintingPrice = 50 * 1e18; // 50 WFRAX
@@ -460,23 +476,33 @@ contract Fraxiversarry is
         emit TokenUnfused(msg.sender, tokenId1, tokenId2, tokenId3, tokenId4, premiumTokenId);
     }
 
+    // ********** ONFT functional overrides **********
+
+    function token() external view override returns (address) {
+        return address(this);
+    }
+
+    function approvalRequired() public view override returns (bool) {
+        return false;
+    }
+
     // ********** Internal functions to facilitate the ERC6454 functionality **********
 
     function _soulboundCheck(uint256 tokenId) internal view {
-        if (isNonTransferrable[tokenId]) revert CannotTransferSoulboundToken();
+        if (!_isBridgeOperation && isNonTransferrable[tokenId]) revert CannotTransferSoulboundToken();
     }
 
     // ********** Internal functions to facilitate the ERC7590 functionality **********
 
     function _transferHeldERC20FromToken(address erc20Contract, uint256 tokenId, address to, uint256 amount) internal {
-        IERC20 token = IERC20(erc20Contract);
+        IERC20 erc20Token = IERC20(erc20Contract);
 
         if (erc20Balances[tokenId][erc20Contract] < amount) revert InsufficientBalance();
 
         erc20Balances[tokenId][erc20Contract] -= amount;
         transferOutNonces[tokenId]++;
 
-        if (!token.transfer(to, amount)) revert TransferFailed();
+        if (!erc20Token.transfer(to, amount)) revert TransferFailed();
 
         emit TransferredERC20(erc20Contract, tokenId, to, amount);
     }
@@ -488,19 +514,117 @@ contract Fraxiversarry is
     }
 
     function _transferERC20ToToken(address erc20Contract, uint256 tokenId, address from, uint256 amount) internal {
-        IERC20 token = IERC20(erc20Contract);
+        IERC20 erc20Token = IERC20(erc20Contract);
 
-        if (token.allowance(from, address(this)) < amount) revert InsufficientAllowance();
-        if (token.balanceOf(from) < amount) revert InsufficientBalance();
+        if (erc20Token.allowance(from, address(this)) < amount) revert InsufficientAllowance();
+        if (erc20Token.balanceOf(from) < amount) revert InsufficientBalance();
 
-        if (!token.transferFrom(from, address(this), amount)) revert TransferFailed();
+        if (!erc20Token.transferFrom(from, address(this), amount)) revert TransferFailed();
 
         erc20Balances[tokenId][erc20Contract] += amount;
 
         emit ReceivedERC20(erc20Contract, tokenId, from, amount);
     }
 
-    // The following functions are overrides required by Solidity.
+    // ********** Internal functions to facilitate the ONFT operations **********
+
+    function _bridgeBurn(address owner, uint256 tokenId) internal {
+        _isBridgeOperation = true;
+        // Token should only be burned, but the state including ERC20 balances should be preserved
+        _update(address(0), tokenId, owner);
+        _isBridgeOperation = false;
+    }
+
+    function _debit(address from, uint256 tokenId, uint32 /*dstEid*/) internal override {
+        address owner = ownerOf(tokenId);
+
+        if (from != owner && !isApprovedForAll(owner, from) && getApproved(tokenId) != from) {
+            revert ERC721InsufficientApproval(from, tokenId);
+        }
+
+        _bridgeBurn(owner, tokenId);
+    }
+
+    function _credit(address to, uint256 tokenId, uint32 /*srcEid*/) internal override {
+        if (_ownerOf(tokenId) != address(0)) revert TokenAlreadyExists(tokenId);
+
+        _isBridgeOperation = true;
+        _update(to, tokenId, address(0));
+        _isBridgeOperation = false;
+    }
+
+    function _buildMsgAndOptions(SendParam calldata sendParam)
+        internal
+        view
+        override
+        returns (bytes memory message, bytes memory options)
+    {
+        if (sendParam.to == bytes32(0)) revert InvalidReceiver();
+console.log("buildMsgAndOptions called");
+        string memory tokenUri = tokenURI(sendParam.tokenId);
+        bool isSoulbound = isNonTransferrable[sendParam.tokenId];
+        bytes memory composedMessage = abi.encode(tokenUri, isSoulbound);
+
+        if (isSoulbound && sendParam.to.bytes32ToAddress() != ownerOf(sendParam.tokenId))
+            revert CannotTransferSoulboundToken();
+
+        bool hasCompose;
+        (message, hasCompose) = ONFT721MsgCodec.encode(sendParam.to, sendParam.tokenId, composedMessage);
+
+        uint16 msgType = hasCompose ? SEND_AND_COMPOSE : SEND;
+        options = combineOptions(sendParam.dstEid, msgType, sendParam.extraOptions);
+
+        address inspector = msgInspector;
+        if (inspector != address(0)) IOAppMsgInspector(inspector).inspect(message, options);
+    }
+
+    function _lzReceive(
+        Origin calldata origin,
+        bytes32 guid,
+        bytes calldata message,
+        address /*_executor*/,
+        bytes calldata /*_extraData*/
+    )
+        internal
+        override
+    {
+        address toAddress = message.sendTo().bytes32ToAddress();
+        uint256 tokenId = message.tokenId();
+
+        if (!message.isComposed()) revert MissingComposedMessage();
+
+        bytes memory rawCompose = message.composeMsg();
+        bytes memory rawMessage = rawCompose;
+        uint256 len;
+        assembly {
+            len := mload(rawCompose)
+            // shift pointer forward by 32 bytes (skip fromOApp word)
+            rawMessage := add(rawMessage, 32)
+            // set length = originalLength - 32
+            mstore(rawMessage, sub(len, 32))
+        }
+
+        (string memory tokenUri, bool isSoulbound) = abi.decode(rawMessage, (string, bool));
+
+        _credit(toAddress, tokenId, origin.srcEid);
+        _setTokenURI(tokenId, tokenUri);
+        isNonTransferrable[tokenId] = isSoulbound;
+
+        bytes32 composeFrom = ONFTComposeMsgCodec.addressToBytes32(address(this));
+        bytes memory composeInnerMsg = abi.encode(tokenUri, isSoulbound);
+        bytes memory composeMsg = abi.encodePacked(composeFrom, composeInnerMsg);
+
+        bytes memory composedMsgEncoded = ONFTComposeMsgCodec.encode(
+            origin.nonce,
+            origin.srcEid,
+            composeMsg
+        );
+        endpoint.sendCompose(toAddress, guid, 0, composedMsgEncoded);
+
+        emit ONFTReceived(guid, origin.srcEid, toAddress, tokenId);
+    }
+
+    // ********** The following functions are overrides required by Solidity. **********
 
     function _update(address to, uint256 tokenId, address auth)
         internal
@@ -531,6 +655,7 @@ contract Fraxiversarry is
         returns (bool)
     {
         return super.supportsInterface(interfaceId) || interfaceId == type(IERC7590).interfaceId
-            || interfaceId == type(IERC6454).interfaceId || interfaceId == type(IERC4906).interfaceId;
+            || interfaceId == type(IERC6454).interfaceId || interfaceId == type(IERC4906).interfaceId
+            || interfaceId == type(IONFT721).interfaceId;
     }
 }

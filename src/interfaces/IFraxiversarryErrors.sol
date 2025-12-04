@@ -12,11 +12,13 @@ contract IFraxiversarryErrors {
     error InvalidGiftMintPrice();
     error InvalidRange();
     error MintingLimitReached();
+    error MissingComposedMessage();
     error OnlyTokenOwnerCanBurnTheToken();
     error OnlyTokenOwnerCanFuseTokens();
     error OnlyTokenOwnerCanUnfuseTokens();
     error OutOfBounds();
     error SameTokenUnderlyingAssets();
+    error TokenAlreadyExists(uint256 tokenId);
     error TokenDoesNotExist();
     error TokensCanOnlyBeDepositedByNftMint();
     error TokensCanOnlyBeRetrievedByNftBurn();

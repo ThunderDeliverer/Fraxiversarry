@@ -12,7 +12,7 @@ contract FraxiversarryDeployScript is Script {
     function run() public {
         vm.startBroadcast();
 
-        fraxiversarry = new Fraxiversarry(msg.sender);
+        fraxiversarry = new Fraxiversarry(msg.sender, address(0xf00));
 
         vm.stopBroadcast();
     }
