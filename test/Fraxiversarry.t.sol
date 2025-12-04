@@ -14,8 +14,13 @@ import {IERC4906} from "openzeppelin-contracts/contracts/interfaces/IERC4906.sol
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {IERC721} from "openzeppelin-contracts/contracts/token/ERC721/IERC721.sol";
 import {IERC165} from "openzeppelin-contracts/contracts/utils/introspection/IERC165.sol";
+import {IONFT721, SendParam} from "@layerzerolabs/onft-evm/contracts/onft721/interfaces/IONFT721.sol";
+import {IOAppMsgInspector} from "@layerzerolabs/oapp-evm/contracts/oapp/interfaces/IOAppMsgInspector.sol";
+import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 
 import {MockERC20} from "./mocks/MockERC20.sol";
+import {MockLzEndpoint} from "./mocks/MockLzEndpoint.sol";
+import {MockMsgInspector} from "./mocks/MockMsgInspector.sol";
 
 contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     using stdStorage for StdStorage;
@@ -26,6 +31,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     MockERC20 sfrxusd;
     MockERC20 sfrxeth;
     MockERC20 fpi;
+    MockLzEndpoint lzEndpoint;
 
     address owner = address(0xA11CE);
     address alice = address(0xB0B);
@@ -50,9 +56,10 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         sfrxusd = new MockERC20("Staked Frax USD", "sfrxUSD");
         sfrxeth = new MockERC20("Staked Frax ETH", "sfrxETH");
         fpi = new MockERC20("Frax Price Index", "FPI");
+        lzEndpoint = new MockLzEndpoint();
 
         // Deploy Fraxiversarry with a dedicated owner
-        fraxiversarry = new Fraxiversarry(owner);
+        fraxiversarry = new Fraxiversarry(owner, address(lzEndpoint));
 
         // Move mocked wFRAX to actual wFRAX address
         address wFraxAddress = fraxiversarry.WFRAX_ADDRESS();
@@ -1496,16 +1503,29 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         vm.expectRevert(); // ERC721: invalid token ID
         fraxiversarry.tokenURI(tokenId);
     }
+
+    // ----------------------------------------------------------
+    // ONFT view helpers (token() / approvalRequired())
+    // ----------------------------------------------------------
+
+    function testONFTTokenReturnsContractAddress() public {
+        assertEq(fraxiversarry.token(), address(fraxiversarry));
+    }
+
+    function testONFTApprovalRequiredIsFalse() public {
+        assertFalse(fraxiversarry.approvalRequired());
+    }
 }
 
 // ----------------------------------------------------------
-// Internal harness to cover _increaseBalance (and _baseURI)
+// Internal harness to cover ONFT internals + _increaseBalance/_baseURI
 // ----------------------------------------------------------
 error ERC721EnumerableForbiddenBatchMint();
 
 contract FraxiversarryInternalHarness is Fraxiversarry {
-    constructor(address initialOwner) Fraxiversarry(initialOwner) {}
+    constructor(address initialOwner, address lzEndpoint) Fraxiversarry(initialOwner, lzEndpoint) {}
 
+    // Existing helpers
     function exposedIncreaseBalance(address account, uint128 value) external {
         _increaseBalance(account, value);
     }
@@ -1513,11 +1533,49 @@ contract FraxiversarryInternalHarness is Fraxiversarry {
     function exposedBaseURI() external pure returns (string memory) {
         return _baseURI();
     }
+
+    // === NEW: ONFT internal exposure ===
+
+    function exposedBridgeBurn(address owner, uint256 tokenId) external {
+        _bridgeBurn(owner, tokenId);
+    }
+
+    function exposedDebit(address from, uint256 tokenId, uint32 dstEid) external {
+        _debit(from, tokenId, dstEid);
+    }
+
+    function exposedCredit(address to, uint256 tokenId, uint32 srcEid) external {
+        _credit(to, tokenId, srcEid);
+    }
+
+    function exposedBuildMsgAndOptions(SendParam calldata sp)
+        external
+        view
+        returns (bytes memory msgData, bytes memory opts)
+    {
+        return _buildMsgAndOptions(sp);
+    }
+
+    function exposedLzReceive(
+        Origin calldata origin,
+        bytes32 guid,
+        bytes calldata message,
+        address executor,
+        bytes calldata extraData
+    ) external {
+        _lzReceive(origin, guid, message, executor, extraData);
+    }
+
+    // Helper to set msgInspector in tests if you want to test inspector calls
+    function exposedSetMsgInspector(address inspector) external onlyOwner {
+        msgInspector = inspector;
+    }
 }
 
 contract FraxiversarryInternalHarnessTest is Test {
     function testIncreaseBalanceOverrideIsUsed() public {
-        FraxiversarryInternalHarness h = new FraxiversarryInternalHarness(address(this));
+        MockLzEndpoint lzEndpoint = new MockLzEndpoint();
+        FraxiversarryInternalHarness h = new FraxiversarryInternalHarness(address(this), address(lzEndpoint));
 
         address user = address(0xBEEF);
 
@@ -1528,7 +1586,8 @@ contract FraxiversarryInternalHarnessTest is Test {
     }
 
     function testBaseURIInternalFunction() public {
-        FraxiversarryInternalHarness h = new FraxiversarryInternalHarness(address(this));
+        MockLzEndpoint lzEndpoint = new MockLzEndpoint();
+        FraxiversarryInternalHarness h = new FraxiversarryInternalHarness(address(this), address(lzEndpoint));
         assertEq(h.exposedBaseURI(), "");
     }
 }
