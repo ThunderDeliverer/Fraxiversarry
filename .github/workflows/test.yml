@@ -34,7 +34,7 @@ jobs:
 
       - name: Run Forge build
         run: |
-          forge build --sizes --contracts src/
+          forge build --sizes --skip test --skip script
         id: build
 
       - name: Run Forge tests
