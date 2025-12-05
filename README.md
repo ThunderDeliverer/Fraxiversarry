@@ -42,7 +42,9 @@ flowchart TB
   end
 
   subgraph Fraxiversarry_Contract
-    C[Fraxiversarry ERC721<br/>+ Enumerable + Pausable + Burnable<br/>+ IERC6454 + IERC7590<br/>+ ONFT721Core]
+    C["Fraxiversarry
+ERC721 + Enumerable + Pausable + Burnable
+IERC6454 + IERC7590 + ONFT721Core"]
   end
 
   subgraph ERC20s
@@ -52,12 +54,14 @@ flowchart TB
 
   subgraph LayerZero
     LZ[Endpoint + ONFT721 libraries]
-    D[Destination Chain<br/>Fraxiversarry instance]
+    D["Destination Chain
+Fraxiversarry instance"]
   end
 
   U1 -->|paidMint| C
   U1 -->|giftMint| C
   O -->|soulboundMint| C
+
   C -->|transferFrom price+fee| E1
   C -->|transferFrom giftPrice+fee| E2
   C -->|records internal balances| C
@@ -281,11 +285,15 @@ Transferability is controlled through:
 ```mermaid
 flowchart TB
   T[Transfer attempt] --> U[_update override]
-  U --> S{_isBridgeOperation?}
-  S -->|yes| OK[skip soulbound check]
-  S -->|no| C{isNonTransferrable[tokenId]?}
-  C -->|yes| R[revert CannotTransferSoulboundToken]
-  C -->|no| P[proceed with OZ _update]
+
+  U --> B{_isBridgeOperation?}
+  B -->|yes| OK[Skip soulbound check]
+
+  B -->|no| SB{isNonTransferrable[tokenId]?}
+  SB -->|yes| R[Revert: CannotTransferSoulboundToken]
+  SB -->|no| P[Proceed with OZ _update]
+
+  OK --> P
 ```
 
 ---
