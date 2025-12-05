@@ -10,6 +10,8 @@ contract IFraxiversarryEvents {
 
     event GiftMintPriceUpdated(uint256 previousMintPrice, uint256 newMintPrice);
 
+    event MintingCutoffBlockUpdated(uint256 previousCutoffBlock, uint256 newCutoffBlock);
+
     event MintingFeeUpdated(uint256 previousFeeBasisPoints, uint256 newFeeBasisPoints);
 
     event MintPriceUpdated(address indexed erc20Contract, uint256 previousMintPrice, uint256 newMintPrice);

@@ -12,6 +12,7 @@ contract IFraxiversarryErrors {
     error InvalidGiftMintPrice();
     error InvalidRange();
     error MintingLimitReached();
+    error MintingPeriodOver();
     error MissingComposedMessage();
     error OnlyTokenOwnerCanBurnTheToken();
     error OnlyTokenOwnerCanFuseTokens();

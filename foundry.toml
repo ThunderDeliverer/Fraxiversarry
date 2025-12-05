@@ -6,5 +6,5 @@ solc = "0.8.30"
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
 optimizer = true
-optimizer_runs = 200
+optimizer_runs = 800
 via_ir = true

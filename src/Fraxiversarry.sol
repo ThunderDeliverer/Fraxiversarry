@@ -59,6 +59,7 @@ contract Fraxiversarry is
     uint256 public giftMintingLimit;
     uint256 public giftMintingPrice;
     uint256 public mintingFeeBasisPoints;
+    uint256 public mintingCutoffBlock;
 
     bool private _isBridgeOperation;
 
@@ -83,6 +84,7 @@ contract Fraxiversarry is
         nextGiftTokenId = mintingLimit;
         nextPremiumTokenId = mintingLimit + giftMintingLimit;
         mintingFeeBasisPoints = 25; // 0.25%
+        mintingCutoffBlock = block.number + (35 days / 2 seconds); // Approximately 5 weeks with 2s blocktime
 
         //TODO: Set correct URIs
         giftTokenUri = "https://gift.tba.frax/";
@@ -102,6 +104,7 @@ contract Fraxiversarry is
     }
 
     function paidMint(address erc20Contract) public returns (uint256) {
+        if (block.number > mintingCutoffBlock) revert MintingPeriodOver();
         if (nextTokenId >= mintingLimit) revert MintingLimitReached();
         if (mintPrices[erc20Contract] == 0) revert UnsupportedToken();
 
@@ -122,6 +125,7 @@ contract Fraxiversarry is
     }
 
     function giftMint(address recipient) public returns (uint256) {
+        if (block.number > mintingCutoffBlock) revert MintingPeriodOver();
         if (nextGiftTokenId >= mintingLimit + giftMintingLimit) revert GiftMintingLimitReached();
 
         uint256 tokenId = nextGiftTokenId;
@@ -309,6 +313,14 @@ contract Fraxiversarry is
         mintingFeeBasisPoints = newFeeBasisPoints;
 
         emit MintingFeeUpdated(previousFeeBasisPoints, newFeeBasisPoints);
+    }
+
+    function updateMintingCutoffBlock(uint256 newCutoffBlock) public onlyOwner {
+        uint256 previousCutoffBlock = mintingCutoffBlock;
+
+        mintingCutoffBlock = newCutoffBlock;
+
+        emit MintingCutoffBlockUpdated(previousCutoffBlock, newCutoffBlock);
     }
 
     function retrieveCollectedFees(address erc20Contract, address to) public onlyOwner {

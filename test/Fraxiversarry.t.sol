@@ -1520,6 +1520,112 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     }
 
     // ----------------------------------------------------------
+    // Minting cutoff block tests
+    // ----------------------------------------------------------
+
+    function testConstructorSetsMintingCutoffBlockRelativeToDeployBlock() public {
+        // Redeploy locally to assert constructor math precisely
+        MockLzEndpoint localEndpoint = new MockLzEndpoint();
+
+        uint256 deployBlock = block.number;
+        Fraxiversarry local = new Fraxiversarry(owner, address(localEndpoint));
+
+        uint256 expectedDelta = (35 days / 2 seconds);
+        assertEq(local.mintingCutoffBlock(), deployBlock + expectedDelta);
+    }
+
+    function testPaidMintAllowedAtCutoffBlock() public {
+        // Set cutoff to current block so mint is still allowed
+        vm.prank(owner);
+        fraxiversarry.updateMintingCutoffBlock(block.number);
+
+        _approveWithFee(alice, wfrax);
+
+        vm.prank(alice);
+        uint256 tokenId = fraxiversarry.paidMint(address(wfrax));
+
+        assertEq(fraxiversarry.ownerOf(tokenId), alice);
+        assertEq(uint256(fraxiversarry.tokenTypes(tokenId)), uint256(Fraxiversarry.TokenType.BASE));
+    }
+
+    function testPaidMintRevertsAfterCutoffBlock() public {
+        uint256 cutoff = block.number;
+        vm.prank(owner);
+        fraxiversarry.updateMintingCutoffBlock(cutoff);
+
+        // Move to cutoff + 1
+        vm.roll(cutoff + 1);
+
+        _approveWithFee(alice, wfrax);
+
+        vm.prank(alice);
+        vm.expectRevert(MintingPeriodOver.selector);
+        fraxiversarry.paidMint(address(wfrax));
+    }
+
+    function testGiftMintAllowedAtCutoffBlock() public {
+        vm.prank(owner);
+        fraxiversarry.updateMintingCutoffBlock(block.number);
+
+        (,, uint256 giftMintingPrice) = fraxiversarry.getGiftMintingPriceWithFee();
+        vm.prank(alice);
+        wfrax.approve(address(fraxiversarry), giftMintingPrice);
+
+        vm.prank(alice);
+        uint256 tokenId = fraxiversarry.giftMint(bob);
+
+        assertEq(fraxiversarry.ownerOf(tokenId), bob);
+        assertEq(uint256(fraxiversarry.tokenTypes(tokenId)), uint256(Fraxiversarry.TokenType.GIFT));
+    }
+
+    function testGiftMintRevertsAfterCutoffBlock() public {
+        uint256 cutoff = block.number;
+        vm.prank(owner);
+        fraxiversarry.updateMintingCutoffBlock(cutoff);
+
+        vm.roll(cutoff + 1);
+
+        (,, uint256 giftMintingPrice) = fraxiversarry.getGiftMintingPriceWithFee();
+        vm.prank(alice);
+        wfrax.approve(address(fraxiversarry), giftMintingPrice);
+
+        vm.prank(alice);
+        vm.expectRevert(MintingPeriodOver.selector);
+        fraxiversarry.giftMint(bob);
+    }
+
+    function testUpdateMintingCutoffBlockOnlyOwner() public {
+        vm.prank(alice);
+        vm.expectRevert(); // Ownable: caller is not the owner
+        fraxiversarry.updateMintingCutoffBlock(block.number + 100);
+    }
+
+    function testUpdateMintingCutoffBlockEmitsEvent() public {
+        uint256 previous = fraxiversarry.mintingCutoffBlock();
+        uint256 next = previous + 123;
+
+        vm.recordLogs();
+        vm.prank(owner);
+        fraxiversarry.updateMintingCutoffBlock(next);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+
+        bytes32 expectedSig = keccak256("MintingCutoffBlockUpdated(uint256,uint256)");
+        bool found;
+
+        for (uint256 i; i < logs.length; ++i) {
+            if (logs[i].topics[0] == expectedSig) {
+                found = true;
+                (uint256 loggedPrev, uint256 loggedNext) = abi.decode(logs[i].data, (uint256, uint256));
+                assertEq(loggedPrev, previous);
+                assertEq(loggedNext, next);
+            }
+        }
+
+        assertTrue(found, "MintingCutoffBlockUpdated event not found");
+        assertEq(fraxiversarry.mintingCutoffBlock(), next);
+    }
+
+    // ----------------------------------------------------------
     // ONFT view helpers (token() / approvalRequired())
     // ----------------------------------------------------------
 
