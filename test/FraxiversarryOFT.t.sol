@@ -90,7 +90,7 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
 
     function _mintBase(address to) internal returns (uint256 tokenId) {
         vm.startPrank(to);
-        wfrax.approve(address(fraxiversarry), WFRAX_PRICE);
+        wfrax.approve(address(fraxiversarry), _total(WFRAX_PRICE));
         tokenId = fraxiversarry.paidMint(address(wfrax));
         vm.stopPrank();
     }
@@ -460,6 +460,15 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
 
         vm.expectRevert(CannotTransferSoulboundToken.selector);
         fraxiversarry.exposedBuildMsgAndOptions(sp);
+    }
+
+    // **** Helpers ****
+    function _fee(uint256 amount) internal view returns (uint256) {
+        return (amount * fraxiversarry.mintingFeeBasisPoints()) / fraxiversarry.MAX_BASIS_POINTS();
+    }
+
+    function _total(uint256 amount) internal view returns (uint256) {
+        return amount + _fee(amount);
     }
 }
 

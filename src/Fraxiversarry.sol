@@ -37,9 +37,11 @@ contract Fraxiversarry is
     using ONFT721MsgCodec for bytes32;
 
     address public constant WFRAX_ADDRESS = 0xFc00000000000000000000000000000000000002;
+    uint256 public constant MAX_BASIS_POINTS = 1e4;
 
     mapping(address erc20 => uint256 price) public mintPrices;
     mapping(address erc20 => string uri) public baseAssetTokenUris;
+    mapping(address erc20 => uint256 fee) public collectedFees;
     mapping(uint256 index => address erc20) public supportedErc20s;
     mapping(uint256 tokenId => mapping(uint256 index => address underlyingAsset)) public underlyingAssets;
     mapping(uint256 tokenId => uint256 numberOfAssets) public numberOfTokenUnderlyingAssets;
@@ -56,6 +58,7 @@ contract Fraxiversarry is
     uint256 public mintingLimit;
     uint256 public giftMintingLimit;
     uint256 public giftMintingPrice;
+    uint256 public mintingFeeBasisPoints;
 
     bool private _isBridgeOperation;
 
@@ -79,6 +82,7 @@ contract Fraxiversarry is
         giftMintingPrice = 50 * 1e18; // 50 WFRAX
         nextGiftTokenId = mintingLimit;
         nextPremiumTokenId = mintingLimit + giftMintingLimit;
+        mintingFeeBasisPoints = 25; // 0.25%
 
         //TODO: Set correct URIs
         giftTokenUri = "https://gift.tba.frax/";
@@ -298,6 +302,41 @@ contract Fraxiversarry is
         emit GiftMintPriceUpdated(previousPrice, newPrice);
     }
 
+    function updateMintingFeeBasisPoints(uint256 newFeeBasisPoints) public onlyOwner {
+        if (newFeeBasisPoints > MAX_BASIS_POINTS) revert OutOfBounds();
+
+        uint256 previousFeeBasisPoints = mintingFeeBasisPoints;
+        mintingFeeBasisPoints = newFeeBasisPoints;
+
+        emit MintingFeeUpdated(previousFeeBasisPoints, newFeeBasisPoints);
+    }
+
+    function retrieveCollectedFees(address erc20Contract, address to) public onlyOwner {
+        uint256 feeAmount = collectedFees[erc20Contract];
+        if (feeAmount == 0) return;
+
+        collectedFees[erc20Contract] = 0;
+        if (!IERC20(erc20Contract).transfer(to, feeAmount)) revert TransferFailed();
+
+        emit FeesRetrieved(erc20Contract, to, feeAmount);
+    }
+
+    function getMintingPriceWithFee(address erc20Contract)
+        public
+        view
+        returns (uint256 mintPrice, uint256 fee, uint256 totalPrice)
+    {
+        mintPrice = mintPrices[erc20Contract];
+        fee = (mintPrice * mintingFeeBasisPoints) / MAX_BASIS_POINTS;
+        totalPrice = mintPrice + fee;
+    }
+
+    function getGiftMintingPriceWithFee() public view returns (uint256 mintPrice, uint256 fee, uint256 totalPrice) {
+        mintPrice = giftMintingPrice;
+        fee = (mintPrice * mintingFeeBasisPoints) / MAX_BASIS_POINTS;
+        totalPrice = mintPrice + fee;
+    }
+
     function getUnderlyingTokenIds(uint256 premiumTokenId)
         external
         view
@@ -513,15 +552,19 @@ contract Fraxiversarry is
 
     function _transferERC20ToToken(address erc20Contract, uint256 tokenId, address from, uint256 amount) internal {
         IERC20 erc20Token = IERC20(erc20Contract);
+        uint256 fee = (amount * mintingFeeBasisPoints) / MAX_BASIS_POINTS;
+        uint256 amountWithFee = amount + fee;
 
-        if (erc20Token.allowance(from, address(this)) < amount) revert InsufficientAllowance();
-        if (erc20Token.balanceOf(from) < amount) revert InsufficientBalance();
+        if (erc20Token.allowance(from, address(this)) < amountWithFee) revert InsufficientAllowance();
+        if (erc20Token.balanceOf(from) < amountWithFee) revert InsufficientBalance();
 
-        if (!erc20Token.transferFrom(from, address(this), amount)) revert TransferFailed();
+        if (!erc20Token.transferFrom(from, address(this), amountWithFee)) revert TransferFailed();
 
         erc20Balances[tokenId][erc20Contract] += amount;
+        collectedFees[erc20Contract] += fee;
 
         emit ReceivedERC20(erc20Contract, tokenId, from, amount);
+        emit FeeCollected(erc20Contract, from, fee);
     }
 
     // ********** Internal functions to facilitate the ONFT operations **********

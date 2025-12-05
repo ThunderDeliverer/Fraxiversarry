@@ -86,6 +86,20 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         vm.stopPrank();
     }
 
+    function _fee(uint256 amount) internal view returns (uint256) {
+        return (amount * fraxiversarry.mintingFeeBasisPoints()) / fraxiversarry.MAX_BASIS_POINTS();
+    }
+
+    function _total(uint256 amount) internal view returns (uint256) {
+        return amount + _fee(amount);
+    }
+
+    function _approveWithFee(address user, MockERC20 token) internal {
+        (,, uint256 totalAmount) = fraxiversarry.getMintingPriceWithFee(address(token));
+        vm.prank(user);
+        token.approve(address(fraxiversarry), totalAmount);
+    }
+
     // ----------------------------------------------------------
     // Constructor / basic properties
     // ----------------------------------------------------------
@@ -176,16 +190,16 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     // ----------------------------------------------------------
 
     function _mintBaseWithWfrax(address minter) internal returns (uint256 tokenId) {
-        vm.startPrank(minter);
-        wfrax.approve(address(fraxiversarry), WFRAX_PRICE);
+        _approveWithFee(minter, wfrax);
+
+        vm.prank(minter);
         tokenId = fraxiversarry.paidMint(address(wfrax));
-        vm.stopPrank();
     }
 
     function testPaidMintBaseTokenHappyPath() public {
         // Record logs around the mint call
         vm.startPrank(alice);
-        wfrax.approve(address(fraxiversarry), WFRAX_PRICE);
+        wfrax.approve(address(fraxiversarry), _total(WFRAX_PRICE));
         vm.recordLogs();
         uint256 tokenId = fraxiversarry.paidMint(address(wfrax));
         Vm.Log[] memory logs = vm.getRecordedLogs();
@@ -223,9 +237,12 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         assertEq(uint256(fraxiversarry.tokenTypes(tokenId)), uint256(Fraxiversarry.TokenType.BASE));
 
         // ERC20 balances
+        uint256 fee = _fee(WFRAX_PRICE);
+
         assertEq(fraxiversarry.erc20Balances(tokenId, address(wfrax)), WFRAX_PRICE);
-        assertEq(wfrax.balanceOf(alice), 1e22 - WFRAX_PRICE);
-        assertEq(wfrax.balanceOf(address(fraxiversarry)), WFRAX_PRICE);
+        assertEq(wfrax.balanceOf(alice), 1e22 - WFRAX_PRICE - fee);
+        assertEq(wfrax.balanceOf(address(fraxiversarry)), WFRAX_PRICE + fee);
+        assertEq(fraxiversarry.collectedFees(address(wfrax)), fee);
 
         // underlying assets
         assertEq(fraxiversarry.underlyingAssets(tokenId, 0), address(wfrax));
@@ -259,7 +276,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         // move alice’s wFRAX away, then try to mint
         wfrax.transfer(bob, wfrax.balanceOf(alice));
 
-        wfrax.approve(address(fraxiversarry), WFRAX_PRICE);
+        wfrax.approve(address(fraxiversarry), _total(WFRAX_PRICE));
         vm.expectRevert();
         fraxiversarry.paidMint(address(wfrax));
         vm.stopPrank();
@@ -270,7 +287,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         wfrax.setFailTransferFrom(true);
 
         vm.startPrank(alice);
-        wfrax.approve(address(fraxiversarry), WFRAX_PRICE);
+        wfrax.approve(address(fraxiversarry), _total(WFRAX_PRICE));
         vm.expectRevert(TransferFailed.selector);
         fraxiversarry.paidMint(address(wfrax));
         vm.stopPrank();
@@ -301,11 +318,11 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     function testGiftMintHappyPath() public {
         uint256 mintingLimit = fraxiversarry.mintingLimit();
         uint256 giftPrice = fraxiversarry.giftMintingPrice();
+        uint256 fee = _fee(giftPrice);
 
         // Alice approves enough wFRAX for at least one gift mint
         vm.startPrank(alice);
-        wfrax.approve(address(fraxiversarry), giftPrice);
-
+        wfrax.approve(address(fraxiversarry), _total(giftPrice));
         // Record logs so we can validate ReceivedERC20
         vm.recordLogs();
         uint256 tokenId = fraxiversarry.giftMint(alice);
@@ -327,8 +344,8 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         assertEq(fraxiversarry.erc20Balances(tokenId, address(wfrax)), giftPrice, "gift token internal balance");
 
         // External ERC20 balances
-        assertEq(wfrax.balanceOf(address(fraxiversarry)), giftPrice, "contract should hold giftPrice");
-        assertEq(wfrax.balanceOf(alice), 1e22 - giftPrice, "alice should be debited giftPrice");
+        assertEq(wfrax.balanceOf(address(fraxiversarry)), giftPrice + fee, "contract should hold giftPrice");
+        assertEq(wfrax.balanceOf(alice), 1e22 - giftPrice - fee, "alice should be debited giftPrice");
 
         // --- Check ReceivedERC20 event ---
         bytes32 expectedSig = keccak256("ReceivedERC20(address,uint256,address,uint256)");
@@ -361,7 +378,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         uint256 mintingLimit = fraxiversarry.mintingLimit();
 
         vm.startPrank(alice);
-        wfrax.approve(address(fraxiversarry), giftPrice);
+        wfrax.approve(address(fraxiversarry), _total(giftPrice));
         vm.recordLogs();
         uint256 tokenId = fraxiversarry.giftMint(bob);
         Vm.Log[] memory logs = vm.getRecordedLogs();
@@ -403,8 +420,8 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         // Approve, then move all tokens away so balance < giftPrice
         vm.startPrank(alice);
-        wfrax.approve(address(fraxiversarry), giftPrice);
-        wfrax.transfer(bob, wfrax.balanceOf(alice)); // drain alice completely
+        wfrax.approve(address(fraxiversarry), _total(giftPrice));
+        wfrax.transfer(bob, wfrax.balanceOf(alice));
 
         vm.expectRevert(InsufficientBalance.selector);
         fraxiversarry.giftMint(alice);
@@ -415,9 +432,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         uint256 giftPrice = fraxiversarry.giftMintingPrice();
 
         vm.startPrank(alice);
-        wfrax.approve(address(fraxiversarry), giftPrice);
-
-        // Force transferFrom to fail inside mock
+        wfrax.approve(address(fraxiversarry), _total(giftPrice));
         wfrax.setFailTransferFrom(true);
 
         vm.expectRevert(TransferFailed.selector);
@@ -435,7 +450,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         vm.startPrank(alice);
         // Give a large allowance so both calls pass allowance check
-        wfrax.approve(address(fraxiversarry), giftPrice * 2);
+        wfrax.approve(address(fraxiversarry), _total(giftPrice) * 2);
 
         // First gift mint succeeds
         fraxiversarry.giftMint(alice);
@@ -450,7 +465,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         uint256 giftPrice = fraxiversarry.giftMintingPrice();
 
         vm.startPrank(alice);
-        wfrax.approve(address(fraxiversarry), giftPrice);
+        wfrax.approve(address(fraxiversarry), _total(giftPrice));
         uint256 tokenId = fraxiversarry.giftMint(alice);
         vm.stopPrank();
 
@@ -586,16 +601,16 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     function _mintFourDifferentBases(address minter) internal returns (uint256 t1, uint256 t2, uint256 t3, uint256 t4) {
         vm.startPrank(minter);
 
-        wfrax.approve(address(fraxiversarry), WFRAX_PRICE);
+        wfrax.approve(address(fraxiversarry), _total(WFRAX_PRICE));
         t1 = fraxiversarry.paidMint(address(wfrax));
 
-        sfrxusd.approve(address(fraxiversarry), SFRXUSD_PRICE);
+        sfrxusd.approve(address(fraxiversarry), _total(SFRXUSD_PRICE));
         t2 = fraxiversarry.paidMint(address(sfrxusd));
 
-        sfrxeth.approve(address(fraxiversarry), SFRXETH_PRICE);
+        sfrxeth.approve(address(fraxiversarry), _total(SFRXETH_PRICE));
         t3 = fraxiversarry.paidMint(address(sfrxeth));
 
-        fpi.approve(address(fraxiversarry), FPI_PRICE);
+        fpi.approve(address(fraxiversarry), _total(FPI_PRICE));
         t4 = fraxiversarry.paidMint(address(fpi));
 
         vm.stopPrank();
@@ -699,13 +714,13 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         // Mint three additional base NFTs for alice (t5, t6, t7)
         vm.startPrank(alice);
-        wfrax.approve(address(fraxiversarry), WFRAX_PRICE);
+        wfrax.approve(address(fraxiversarry), _total(WFRAX_PRICE));
         uint256 t5 = fraxiversarry.paidMint(address(wfrax));
 
-        sfrxusd.approve(address(fraxiversarry), SFRXUSD_PRICE);
+        sfrxusd.approve(address(fraxiversarry), _total(SFRXUSD_PRICE));
         uint256 t6 = fraxiversarry.paidMint(address(sfrxusd));
 
-        sfrxeth.approve(address(fraxiversarry), SFRXETH_PRICE);
+        sfrxeth.approve(address(fraxiversarry), _total(SFRXETH_PRICE));
         uint256 t7 = fraxiversarry.paidMint(address(sfrxeth));
         vm.stopPrank();
 
@@ -721,7 +736,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         fraxiversarry.updateBaseAssetMintPrice(address(sfrxusd), WFRAX_PRICE);
 
         vm.startPrank(alice);
-        wfrax.approve(address(fraxiversarry), WFRAX_PRICE * 4);
+        wfrax.approve(address(fraxiversarry), _total(WFRAX_PRICE) * 4);
         uint256 t1 = fraxiversarry.paidMint(address(wfrax));
         uint256 t2 = fraxiversarry.paidMint(address(wfrax));
         uint256 t3 = fraxiversarry.paidMint(address(wfrax));
@@ -1312,7 +1327,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         uint256 giftPrice = fraxiversarry.giftMintingPrice();
 
         vm.startPrank(alice);
-        wfrax.approve(address(fraxiversarry), giftPrice);
+        wfrax.approve(address(fraxiversarry), _total(giftPrice));
         uint256 giftId = fraxiversarry.giftMint(alice);
         vm.stopPrank();
 
@@ -1404,7 +1419,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         // Mint exactly one gift to advance nextGiftTokenId
         uint256 giftPrice = fraxiversarry.giftMintingPrice();
         vm.startPrank(alice);
-        wfrax.approve(address(fraxiversarry), giftPrice);
+        wfrax.approve(address(fraxiversarry), (_total(giftPrice)));
         uint256 giftId = fraxiversarry.giftMint(alice);
         vm.stopPrank();
 
@@ -1423,7 +1438,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         // GIFT
         uint256 giftPrice = fraxiversarry.giftMintingPrice();
         vm.startPrank(alice);
-        wfrax.approve(address(fraxiversarry), giftPrice);
+        wfrax.approve(address(fraxiversarry), (_total(giftPrice)));
         uint256 giftId = fraxiversarry.giftMint(alice);
         vm.stopPrank();
         assertTrue(fraxiversarry.isTransferable(giftId, alice, bob));
@@ -1514,6 +1529,146 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
     function testONFTApprovalRequiredIsFalse() public {
         assertFalse(fraxiversarry.approvalRequired());
+    }
+
+    // ----------------------------------------------------------
+    // Validate fees
+    // ----------------------------------------------------------
+
+    function testPaidMintEmitsFeeCollected() public {
+        uint256 fee = _fee(WFRAX_PRICE);
+
+        vm.startPrank(alice);
+        wfrax.approve(address(fraxiversarry), _total(WFRAX_PRICE));
+
+        vm.recordLogs();
+        uint256 tokenId = fraxiversarry.paidMint(address(wfrax));
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        vm.stopPrank();
+
+        bytes32 sig = keccak256("FeeCollected(address,address,uint256)");
+        bool found;
+
+        for (uint256 i; i < logs.length; ++i) {
+            if (logs[i].topics[0] == sig) {
+                found = true;
+
+                assertEq(address(uint160(uint256(logs[i].topics[1]))), address(wfrax));
+                assertEq(address(uint160(uint256(logs[i].topics[2]))), alice);
+
+                (uint256 loggedFee) = abi.decode(logs[i].data, (uint256));
+                assertEq(loggedFee, fee);
+            }
+        }
+
+        assertTrue(found, "FeeCollected not found");
+        assertEq(fraxiversarry.erc20Balances(tokenId, address(wfrax)), WFRAX_PRICE);
+    }
+
+    function testGiftMintEmitsFeeCollected() public {
+        uint256 giftPrice = fraxiversarry.giftMintingPrice();
+        uint256 fee = _fee(giftPrice);
+
+        vm.startPrank(alice);
+        wfrax.approve(address(fraxiversarry), giftPrice + fee);
+
+        vm.recordLogs();
+        fraxiversarry.giftMint(bob);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        vm.stopPrank();
+
+        bytes32 sig = keccak256("FeeCollected(address,address,uint256)");
+        bool found;
+
+        for (uint256 i; i < logs.length; ++i) {
+            if (logs[i].topics[0] == sig) {
+                found = true;
+                assertEq(address(uint160(uint256(logs[i].topics[1]))), address(wfrax));
+                assertEq(address(uint160(uint256(logs[i].topics[2]))), alice);
+
+                (uint256 loggedFee) = abi.decode(logs[i].data, (uint256));
+                assertEq(loggedFee, fee);
+            }
+        }
+
+        assertTrue(found, "FeeCollected not found for giftMint");
+    }
+
+    function testGetMintingPriceWithFee() public {
+        (uint256 price, uint256 fee, uint256 total) = fraxiversarry.getMintingPriceWithFee(address(wfrax));
+
+        assertEq(price, WFRAX_PRICE);
+        assertEq(fee, (WFRAX_PRICE * 25) / 1e4);
+        assertEq(total, price + fee);
+    }
+
+    function testGetGiftMintingPriceWithFee() public {
+        uint256 giftPrice = fraxiversarry.giftMintingPrice();
+        (uint256 price, uint256 fee, uint256 total) = fraxiversarry.getGiftMintingPriceWithFee();
+
+        assertEq(price, giftPrice);
+        assertEq(fee, (giftPrice * 25) / 1e4);
+        assertEq(total, price + fee);
+    }
+
+    function testUpdateMintingFeeBasisPointsEmitsEvent() public {
+        uint256 oldFee = fraxiversarry.mintingFeeBasisPoints();
+        uint256 newFee = oldFee + 10;
+
+        vm.recordLogs();
+        vm.prank(owner);
+        fraxiversarry.updateMintingFeeBasisPoints(newFee);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+
+        bytes32 sig = keccak256("MintingFeeUpdated(uint256,uint256)");
+        bool found;
+
+        for (uint256 i; i < logs.length; ++i) {
+            if (logs[i].topics[0] == sig) {
+                found = true;
+                (uint256 prev, uint256 next) = abi.decode(logs[i].data, (uint256, uint256));
+                assertEq(prev, oldFee);
+                assertEq(next, newFee);
+            }
+        }
+
+        assertTrue(found, "MintingFeeUpdated not found");
+        assertEq(fraxiversarry.mintingFeeBasisPoints(), newFee);
+    }
+
+    function testRetrieveCollectedFeesTransfersAndZeros() public {
+        // generate some fees
+        _approveWithFee(alice, wfrax);
+        vm.prank(alice);
+        fraxiversarry.paidMint(address(wfrax));
+
+        uint256 fee = _fee(WFRAX_PRICE);
+        assertEq(fraxiversarry.collectedFees(address(wfrax)), fee);
+
+        uint256 ownerBefore = wfrax.balanceOf(owner);
+
+        vm.prank(owner);
+        fraxiversarry.retrieveCollectedFees(address(wfrax), owner);
+
+        assertEq(fraxiversarry.collectedFees(address(wfrax)), 0);
+        assertEq(wfrax.balanceOf(owner), ownerBefore + fee);
+    }
+
+    function testRetrieveCollectedFeesNoopWhenZero() public {
+        assertEq(fraxiversarry.collectedFees(address(wfrax)), 0);
+
+        vm.prank(owner);
+        fraxiversarry.retrieveCollectedFees(address(wfrax), owner);
+
+        assertEq(fraxiversarry.collectedFees(address(wfrax)), 0);
+    }
+
+    function testPaidMintRevertsWhenAllowanceCoversPriceButNotFee() public {
+        vm.startPrank(alice);
+        wfrax.approve(address(fraxiversarry), WFRAX_PRICE); // missing fee
+        vm.expectRevert(InsufficientAllowance.selector);
+        fraxiversarry.paidMint(address(wfrax));
+        vm.stopPrank();
     }
 }
 
