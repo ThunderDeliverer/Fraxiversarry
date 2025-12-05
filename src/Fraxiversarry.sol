@@ -261,7 +261,7 @@ contract Fraxiversarry is
 
     function updateBaseAssetMintPrice(address erc20Contract, uint256 mintPrice) public onlyOwner {
         uint256 previousMintPrice = mintPrices[erc20Contract];
-        if (previousMintPrice == mintPrice) revert AttemptigToSetExistingMintPrice();
+        if (previousMintPrice == mintPrice) revert AttemptingToSetExistingMintPrice();
 
         mintPrices[erc20Contract] = mintPrice;
 
@@ -299,7 +299,7 @@ contract Fraxiversarry is
     function updateGiftMintingPrice(uint256 newPrice) public onlyOwner {
         if (newPrice <= 1e18) revert InvalidGiftMintPrice(); // Minimum 1 WFRAX
         uint256 previousPrice = giftMintingPrice;
-        if (previousPrice == newPrice) revert AttemptigToSetExistingMintPrice();
+        if (previousPrice == newPrice) revert AttemptingToSetExistingMintPrice();
 
         giftMintingPrice = newPrice;
 

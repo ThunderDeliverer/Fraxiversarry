@@ -2,7 +2,7 @@
 pragma solidity ^0.8.30;
 
 contract IFraxiversarryErrors {
-    error AttemptigToSetExistingMintPrice();
+    error AttemptingToSetExistingMintPrice();
     error CannotTransferSoulboundToken();
     error CanOnlyFuseBaseTokens();
     error CanOnlyUnfuseFusedTokens();

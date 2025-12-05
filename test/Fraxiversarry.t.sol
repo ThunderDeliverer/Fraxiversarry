@@ -181,7 +181,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
     function testUpdateBaseAssetMintPriceRevertsOnSamePrice() public {
         vm.prank(owner);
-        vm.expectRevert(AttemptigToSetExistingMintPrice.selector);
+        vm.expectRevert(AttemptingToSetExistingMintPrice.selector);
         fraxiversarry.updateBaseAssetMintPrice(address(wfrax), WFRAX_PRICE);
     }
 
@@ -1313,7 +1313,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     function testUpdateGiftMintingPriceRevertsOnSamePrice() public {
         uint256 current = fraxiversarry.giftMintingPrice();
         vm.prank(owner);
-        vm.expectRevert(AttemptigToSetExistingMintPrice.selector);
+        vm.expectRevert(AttemptingToSetExistingMintPrice.selector);
         fraxiversarry.updateGiftMintingPrice(current);
     }
 
