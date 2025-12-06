@@ -66,7 +66,7 @@ Fraxiversarry instance"]
   C -->|transferFrom giftPrice+fee| E2
   C -->|records internal balances| C
 
-  U1 -->|fuseTokens (4 BASE)| C
+  U1 -->|"fuseTokens (4 BASE)"| C
   C -->|escrows BASE NFTs| C
   U1 -->|unfuseTokens| C
   C -->|returns BASE NFTs| U1
@@ -289,7 +289,7 @@ flowchart TB
   U --> B{_isBridgeOperation?}
   B -->|yes| OK[Skip soulbound check]
 
-  B -->|no| SB{isNonTransferrable[tokenId]?}
+  B -->|no| SB{"isNonTransferrable[tokenId]?"}
   SB -->|yes| R[Revert: CannotTransferSoulboundToken]
   SB -->|no| P[Proceed with OZ _update]
 
