@@ -40,7 +40,7 @@ Token metadata contains information that allows the UIs to display tokens proper
 - BASE sfrxETH token: [https://arweave.net/Rzs5IiJpVPKIPRHgqmqDhDKikt_miLqJKYTPBEkUSzw](https://arweave.net/Rzs5IiJpVPKIPRHgqmqDhDKikt_miLqJKYTPBEkUSzw)
 - BASE FPI token: [https://arweave.net/p9QZj7kpFy_iOCmDxH3gYqqDtvzZsU81QkWYn7DpBUA](https://arweave.net/p9QZj7kpFy_iOCmDxH3gYqqDtvzZsU81QkWYn7DpBUA)
 - FUSED token: [https://arweave.net/-pyCwZBiSn498egF8gfqrCJz4gmdVC0XxrN8wO9DuWQ](https://arweave.net/-pyCwZBiSn498egF8gfqrCJz4gmdVC0XxrN8wO9DuWQ)
-- GIFT token: [https://arweave.net/M8v8vmCS3wcyq6k0GdJ9niLUxgHeKFe2tOhBR9LVMSY](https://arweave.net/M8v8vmCS3wcyq6k0GdJ9niLUxgHeKFe2tOhBR9LVMSY)
+- GIFT token: [https://arweave.net/gv2ghexT4l3LVsheyz1MCO86yZnTFeFo__G6guMq7OE](https://arweave.net/gv2ghexT4l3LVsheyz1MCO86yZnTFeFo__G6guMq7OE)
 
 ---
 
