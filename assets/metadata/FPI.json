@@ -1,0 +1,32 @@
+{
+    "name": "Fraxiversarry Base — FPI",
+    "description": "Fraxiversarry BASE token backed by 1000 FPI deposit.",
+    "external_url": "https://frax.com/nft",
+    "image": "https://arweave.net/MWrhim4WIYtyfTunYE-QMlpLGHlxVksjBe2G3JAo6rc",
+    "content": [
+        {
+            "@type": "IMAGE",
+            "url": "https://arweave.net/MWrhim4WIYtyfTunYE-QMlpLGHlxVksjBe2G3JAo6rc",
+            "representation": "ORIGINAL",
+            "mimeType": "image/png"
+        }
+    ],
+    "attributes": [
+        {
+            "trait_type": "Type",
+            "value": "BASE"
+        },
+        {
+            "trait_type": "Backing Asset Count",
+            "value": 1
+        },
+        {
+            "trait_type": "Backing Asset",
+            "value": "FPI"
+        },
+        {
+            "trait_type": "Backing Amount",
+            "value": "1000 FPI"
+        }
+    ]
+}

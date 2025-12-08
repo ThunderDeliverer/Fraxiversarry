@@ -1,0 +1,32 @@
+{
+    "name": "Fraxiversarry Base — WFRAX",
+    "description": "Fraxiversarry BASE token backed by 1000 WFRAX deposit.",
+    "external_url": "https://frax.com/nft",
+    "image": "https://arweave.net/VeSSglLJzT4zAaxGMq-CFV21rki0jV4qHJ1-qbrkqUQ",
+    "content": [
+        {
+            "@type": "IMAGE",
+            "url": "https://arweave.net/VeSSglLJzT4zAaxGMq-CFV21rki0jV4qHJ1-qbrkqUQ",
+            "representation": "ORIGINAL",
+            "mimeType": "image/png"
+        }
+    ],
+    "attributes": [
+        {
+            "trait_type": "Type",
+            "value": "BASE"
+        },
+        {
+            "trait_type": "Backing Asset Count",
+            "value": 1
+        },
+        {
+            "trait_type": "Backing Asset",
+            "value": "WFRAX"
+        },
+        {
+            "trait_type": "Backing Amount",
+            "value": "1000 WFRAX"
+        }
+    ]
+}

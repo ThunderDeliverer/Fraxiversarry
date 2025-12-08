@@ -1,0 +1,56 @@
+{
+    "name": "Fraxiversarry Fused",
+    "description": "A FUSED Fraxiversarry token created by fusing four distinct BASE tokens.",
+    "external_url": "https://frax.com/nft",
+    "image": "https://arweave.net/T8RKSnK2zTvw-T6TWMwkJOQM0YhHLN-LI9J2wTJWM-o",
+    "content": [
+        {
+            "@type": "IMAGE",
+            "url": "https://arweave.net/T8RKSnK2zTvw-T6TWMwkJOQM0YhHLN-LI9J2wTJWM-o",
+            "representation": "ORIGINAL",
+            "mimeType": "image/png"
+        }
+    ],
+    "attributes": [
+        {
+            "trait_type": "Type",
+            "value": "FUSED"
+        },
+        {
+            "trait_type": "Backing Asset Count",
+            "value": 4
+        },
+        {
+            "trait_type": "Backing Asset",
+            "value": "WFRAX"
+        },
+        {
+            "trait_type": "Backing Asset",
+            "value": "sfrxUSD"
+        },
+        {
+            "trait_type": "Backing Asset",
+            "value": "sfrxETH"
+        },
+        {
+            "trait_type": "Backing Asset",
+            "value": "FPI"
+        },
+        {
+            "trait_type": "Backing Amount",
+            "value": "1000 WFRAX"
+        },
+        {
+            "trait_type": "Backing Amount",
+            "value": "1000 sfrxUSD"
+        },
+        {
+            "trait_type": "Backing Amount",
+            "value": "1 sfrxETH"
+        },
+        {
+            "trait_type": "Backing Amount",
+            "value": "1000 FPI"
+        }
+    ]
+}

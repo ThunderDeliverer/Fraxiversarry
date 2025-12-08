@@ -1,0 +1,32 @@
+{
+    "name": "Fraxiversarry Base — sfrxETH",
+    "description": "Fraxiversarry BASE token backed by a 1 sfrxETH deposit.",
+    "external_url": "https://frax.com/nft",
+    "image": "https://arweave.net/N_t7pvdS187n7MMFxaNyV2umBU76MJYzDUBDE8OzroY",
+    "content": [
+        {
+            "@type": "IMAGE",
+            "url": "https://arweave.net/N_t7pvdS187n7MMFxaNyV2umBU76MJYzDUBDE8OzroY",
+            "representation": "ORIGINAL",
+            "mimeType": "image/png"
+        }
+    ],
+    "attributes": [
+        {
+            "trait_type": "Type",
+            "value": "BASE"
+        },
+        {
+            "trait_type": "Backing Asset Count",
+            "value": 1
+        },
+        {
+            "trait_type": "Backing Asset",
+            "value": "sfrxETH"
+        },
+        {
+            "trait_type": "Backing Amount",
+            "value": "1 sfrxETH"
+        }
+    ]
+}

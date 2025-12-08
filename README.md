@@ -31,6 +31,19 @@ prevents normal transfers while still allowing ONFT debit/credit operations.
 
 ---
 
+## Token metadata
+
+Token metadata contains information that allows the UIs to display tokens properly. It also includes the link to the image representing the token.
+
+- BASE WFRAX token: [https://arweave.net/](https://arweave.net/)
+- BASE sfrxUSD token: [https://arweave.net/VAk7sIe36qVGS80TCBqctI1pZJbwDzx6KytRA5l6VhE](https://arweave.net/VAk7sIe36qVGS80TCBqctI1pZJbwDzx6KytRA5l6VhE)
+- BASE sfrxETH token: [https://arweave.net/Rzs5IiJpVPKIPRHgqmqDhDKikt_miLqJKYTPBEkUSzw](https://arweave.net/Rzs5IiJpVPKIPRHgqmqDhDKikt_miLqJKYTPBEkUSzw)
+- BASE FPI token: [https://arweave.net/](https://arweave.net/)
+- FUSED token: [https://arweave.net/](https://arweave.net/)
+- GIFT token: [https://arweave.net/](https://arweave.net/)
+
+---
+
 ## Architecture map
 
 ```mermaid

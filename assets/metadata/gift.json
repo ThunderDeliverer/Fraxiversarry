@@ -1,0 +1,32 @@
+{
+    "name": "Fraxiversarry Gift",
+    "description": "Fraxiversarry GIFT token backed by 50 WFRAX.",
+    "external_url": "https://frax.com/nft",
+    "image": "https://arweave.net/JsdJJ5r5re4mBmaUHkOjAOxbQIiaqDzFTYYeCKaud_E",
+    "content": [
+        {
+            "@type": "IMAGE",
+            "url": "https://arweave.net/JsdJJ5r5re4mBmaUHkOjAOxbQIiaqDzFTYYeCKaud_E",
+            "representation": "ORIGINAL",
+            "mimeType": "image/png"
+        }
+    ],
+    "attributes": [
+        {
+            "trait_type": "Type",
+            "value": "GIFT"
+        },
+        {
+            "trait_type": "Backing Asset Count",
+            "value": 0
+        },
+        {
+            "trait_type": "Backing Asset",
+            "value": "WFRAX"
+        },
+        {
+            "trait_type": "Backing Amount",
+            "value": "50 WFRAX"
+        }
+    ]
+}
