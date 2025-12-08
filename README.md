@@ -35,12 +35,12 @@ prevents normal transfers while still allowing ONFT debit/credit operations.
 
 Token metadata contains information that allows the UIs to display tokens properly. It also includes the link to the image representing the token.
 
-- BASE WFRAX token: [https://arweave.net/](https://arweave.net/)
+- BASE WFRAX token: [https://arweave.net/CxQl0ki_oqypKeGVbVHBIAPjY2QT3jaBDX9FSqrfBd4](https://arweave.net/CxQl0ki_oqypKeGVbVHBIAPjY2QT3jaBDX9FSqrfBd4)
 - BASE sfrxUSD token: [https://arweave.net/VAk7sIe36qVGS80TCBqctI1pZJbwDzx6KytRA5l6VhE](https://arweave.net/VAk7sIe36qVGS80TCBqctI1pZJbwDzx6KytRA5l6VhE)
 - BASE sfrxETH token: [https://arweave.net/Rzs5IiJpVPKIPRHgqmqDhDKikt_miLqJKYTPBEkUSzw](https://arweave.net/Rzs5IiJpVPKIPRHgqmqDhDKikt_miLqJKYTPBEkUSzw)
-- BASE FPI token: [https://arweave.net/](https://arweave.net/)
-- FUSED token: [https://arweave.net/](https://arweave.net/)
-- GIFT token: [https://arweave.net/](https://arweave.net/)
+- BASE FPI token: [https://arweave.net/p9QZj7kpFy_iOCmDxH3gYqqDtvzZsU81QkWYn7DpBUA](https://arweave.net/p9QZj7kpFy_iOCmDxH3gYqqDtvzZsU81QkWYn7DpBUA)
+- FUSED token: [https://arweave.net/-pyCwZBiSn498egF8gfqrCJz4gmdVC0XxrN8wO9DuWQ](https://arweave.net/-pyCwZBiSn498egF8gfqrCJz4gmdVC0XxrN8wO9DuWQ)
+- GIFT token: [https://arweave.net/M8v8vmCS3wcyq6k0GdJ9niLUxgHeKFe2tOhBR9LVMSY](https://arweave.net/M8v8vmCS3wcyq6k0GdJ9niLUxgHeKFe2tOhBR9LVMSY)
 
 ---
 
