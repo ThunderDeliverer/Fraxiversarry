@@ -2,7 +2,7 @@
 pragma solidity ^0.8.30;
 
 contract MockLzEndpoint {
-    event ComposeSent(address to, bytes32 guid, uint256 value, bytes message);
+    event ComposeSent(address to, bytes32 guid, uint16 index, bytes message);
 
     uint32 public immutable EID = 1;
     address public delegateAddress;
@@ -23,8 +23,8 @@ contract MockLzEndpoint {
     }
 
     // Used by Fraxiversarry._lzReceive -> endpoint.sendCompose(...)
-    function sendCompose(address to, bytes32 guid, uint256 value, bytes calldata message) external {
-        emit ComposeSent(to, guid, value, message);
+    function sendCompose(address to, bytes32 guid, uint16 index, bytes calldata message) external {
+        emit ComposeSent(to, guid, index, message);
     }
 
     // Safety net: if OApp/ONFT calls any other endpoint function, don't revert
