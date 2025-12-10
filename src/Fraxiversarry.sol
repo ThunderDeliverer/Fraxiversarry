@@ -17,6 +17,7 @@ pragma solidity ^0.8.30;
  */
 
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ERC721} from "openzeppelin-contracts/contracts/token/ERC721/ERC721.sol";
 import {ERC721Burnable} from "openzeppelin-contracts/contracts/token/ERC721/extensions/ERC721Burnable.sol";
 import {ERC721Enumerable} from "openzeppelin-contracts/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
@@ -64,6 +65,7 @@ contract Fraxiversarry is
 {
     using ONFT721MsgCodec for bytes;
     using ONFT721MsgCodec for bytes32;
+    using SafeERC20 for IERC20;
 
     /// @notice Canonical WFRAX address on Fraxtal used for gift mints and internal accounting
     address public constant WFRAX_ADDRESS = 0xFc00000000000000000000000000000000000002;
@@ -94,13 +96,8 @@ contract Fraxiversarry is
     /// @notice Stores the underlying ERC20 asset addresses attached to each tokenId
     /// @dev tokenId Fraxiversarry token ID that holds underlying assets
     /// @dev index Position of the underlying asset for the tokenId
-    /// @dev underlyingAsset ERC20 token address stored at a given index for the tokenId
-    mapping(uint256 tokenId => mapping(uint256 index => address underlyingAsset)) public underlyingAssets;
-
-    /// @notice Stores the number of underlying ERC20 assets recorded for each tokenId
-    /// @dev tokenId Fraxiversarry token ID that holds underlying assets
-    /// @dev numberOfAssets Count of underlyingAssets entries for the tokenId
-    mapping(uint256 tokenId => uint256 numberOfAssets) public numberOfTokenUnderlyingAssets;
+    /// @dev assets ERC20 token address stored at a given index for the tokenId
+    mapping(uint256 tokenId => address[] assets) public underlyingAssets;
 
     /// @notice Stores the outbound ERC20 transfer nonce for each tokenId
     /// @dev tokenId Fraxiversarry token ID that holds underlying assets
@@ -248,8 +245,7 @@ contract Fraxiversarry is
         _transferERC20ToToken(_erc20Contract, tokenId, msg.sender);
 
         // Update underlying assets with the asset being used when minting
-        underlyingAssets[tokenId][numberOfTokenUnderlyingAssets[tokenId]] = _erc20Contract;
-        numberOfTokenUnderlyingAssets[tokenId] += 1;
+        underlyingAssets[tokenId].push(_erc20Contract);
 
         // Set the token type to BASE
         tokenTypes[tokenId] = TokenType.BASE;
@@ -276,8 +272,7 @@ contract Fraxiversarry is
         _transferERC20ToToken(WFRAX_ADDRESS, tokenId, msg.sender, giftMintingPrice);
 
         // Update underlying assets with the asset being used when minting
-        underlyingAssets[tokenId][numberOfTokenUnderlyingAssets[tokenId]] = WFRAX_ADDRESS;
-        numberOfTokenUnderlyingAssets[tokenId] += 1;
+        underlyingAssets[tokenId].push(WFRAX_ADDRESS);
 
         // Set the token type to GIFT
         tokenTypes[tokenId] = TokenType.GIFT;
@@ -325,7 +320,7 @@ contract Fraxiversarry is
         if (msg.sender != ownerOf(_tokenId)) revert OnlyTokenOwnerCanBurnTheToken();
         if (tokenTypes[_tokenId] == TokenType.FUSED) revert UnfuseTokenBeforeBurning();
         // Transfer out the held ERC20 and then burn the NFT
-        for (uint256 i; i < numberOfTokenUnderlyingAssets[_tokenId];) {
+        for (uint256 i; i < underlyingAssets[_tokenId].length;) {
             _transferHeldERC20FromToken(
                 underlyingAssets[_tokenId][i],
                 _tokenId,
@@ -337,7 +332,8 @@ contract Fraxiversarry is
                 ++i;
             }
         }
-        numberOfTokenUnderlyingAssets[_tokenId] = 0;
+
+        delete underlyingAssets[_tokenId];
         super.burn(_tokenId);
         tokenTypes[_tokenId] = TokenType.NONEXISTENT;
     }
@@ -382,6 +378,13 @@ contract Fraxiversarry is
         if (_lastTokenId >= nextTokenId) revert OutOfBounds();
 
         for (uint256 tokenId = _firstTokenId; tokenId <= _lastTokenId;) {
+            if (tokenTypes[tokenId] != TokenType.BASE) {
+                unchecked {
+                    ++tokenId;
+                }
+                continue;
+            }
+
             address underlyingAsset = underlyingAssets[tokenId][0];
 
             // Only update if there is an underlying asset (if the token exists)
@@ -565,7 +568,7 @@ contract Fraxiversarry is
         if (feeAmount == 0) return;
 
         collectedFees[_erc20Contract] = 0;
-        if (!IERC20(_erc20Contract).transfer(_to, feeAmount)) revert TransferFailed();
+        if (!IERC20(_erc20Contract).trySafeTransfer(_to, feeAmount)) revert TransferFailed();
 
         emit FeesRetrieved(_erc20Contract, _to, feeAmount);
     }
@@ -912,7 +915,7 @@ contract Fraxiversarry is
         erc20Balances[_tokenId][_erc20Contract] -= _amount;
         transferOutNonces[_tokenId]++;
 
-        if (!erc20Token.transfer(_to, _amount)) revert TransferFailed();
+        if (!erc20Token.trySafeTransfer(_to, _amount)) revert TransferFailed();
 
         emit TransferredERC20(_erc20Contract, _tokenId, _to, _amount);
     }
@@ -947,7 +950,7 @@ contract Fraxiversarry is
         if (erc20Token.allowance(_from, address(this)) < amountWithFee) revert InsufficientAllowance();
         if (erc20Token.balanceOf(_from) < amountWithFee) revert InsufficientBalance();
 
-        if (!erc20Token.transferFrom(_from, address(this), amountWithFee)) revert TransferFailed();
+        if (!erc20Token.trySafeTransferFrom(_from, address(this), amountWithFee)) revert TransferFailed();
 
         erc20Balances[_tokenId][_erc20Contract] += _amount;
         collectedFees[_erc20Contract] += fee;

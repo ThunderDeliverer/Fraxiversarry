@@ -26,7 +26,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     using stdStorage for StdStorage;
     StdStorage private _stdStore;
 
-    Fraxiversarry fraxiversarry;
+    FraxiversarryInternalHarness fraxiversarry;
     MockERC20 wfrax;
     MockERC20 sfrxusd;
     MockERC20 sfrxeth;
@@ -59,7 +59,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         lzEndpoint = new MockLzEndpoint();
 
         // Deploy Fraxiversarry with a dedicated owner
-        fraxiversarry = new Fraxiversarry(owner, address(lzEndpoint));
+        fraxiversarry = new FraxiversarryInternalHarness(owner, address(lzEndpoint));
 
         // Move mocked wFRAX to actual wFRAX address
         address wFraxAddress = fraxiversarry.WFRAX_ADDRESS();
@@ -246,7 +246,6 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         // underlying assets
         assertEq(fraxiversarry.underlyingAssets(tokenId, 0), address(wfrax));
-        assertEq(fraxiversarry.numberOfTokenUnderlyingAssets(tokenId), 1);
 
         // isTransferable should be true for BASE
         assertTrue(fraxiversarry.isTransferable(tokenId, alice, bob));
@@ -277,7 +276,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         wfrax.transfer(bob, wfrax.balanceOf(alice));
 
         wfrax.approve(address(fraxiversarry), _total(WFRAX_PRICE));
-        vm.expectRevert();
+        vm.expectRevert(InsufficientBalance.selector);
         fraxiversarry.paidMint(address(wfrax));
         vm.stopPrank();
     }
@@ -340,7 +339,6 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         // --- Underlying asset / balances ---
         assertEq(fraxiversarry.underlyingAssets(tokenId, 0), address(wfrax), "gift underlying asset");
-        assertEq(fraxiversarry.numberOfTokenUnderlyingAssets(tokenId), 1, "gift token underlying count");
         assertEq(fraxiversarry.erc20Balances(tokenId, address(wfrax)), giftPrice, "gift token internal balance");
 
         // External ERC20 balances
@@ -566,7 +564,6 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         vm.expectRevert(); // ERC721NonexistentToken
         fraxiversarry.ownerOf(tokenId);
         assertEq(uint256(fraxiversarry.tokenTypes(tokenId)), uint256(Fraxiversarry.TokenType.NONEXISTENT));
-        assertEq(fraxiversarry.numberOfTokenUnderlyingAssets(tokenId), 0);
 
         // ERC20 balances: user got tokens back
         assertEq(wfrax.balanceOf(alice), preAliceFraxBalance + WFRAX_PRICE);
@@ -1000,12 +997,11 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         uint256 t1 = _mintBaseWithWfrax(alice);
         uint256 t2 = _mintBaseWithWfrax(alice);
 
-        // zero out t2 balance and underlying asset manually (simulate burned/cleared)
-        vm.store(
-            address(fraxiversarry),
-            keccak256(abi.encode(t2, uint256(uint160(address(wfrax))) << 96)), // this is hacky; simpler: use contract functions instead in real setup
-            bytes32(0)
-        );
+        // zero out t2's internal balance for WFRAX using stdStore (safe + layout-correct)
+        uint256 balSlot = _stdStore.target(address(fraxiversarry)).sig("erc20Balances(uint256,address)").with_key(t2)
+            .with_key(address(wfrax)).find();
+
+        vm.store(address(fraxiversarry), bytes32(balSlot), bytes32(uint256(0)));
         // Alternatively you can burn t2 to clear state; but we want a token with owner but no underlying/balance
         // For simplicity, leave as demonstration; coverage-wise, function executes branch where condition is false.
 
@@ -1471,6 +1467,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         uint256 tokenId = _mintBaseWithWfrax(alice);
 
         // Add a second underlying asset (sfrxusd) to this tokenId
+
         // 1) Mint sfrxusd to the contract so transfers won't fail
         sfrxusd.mint(address(fraxiversarry), 123);
 
@@ -1480,17 +1477,8 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         vm.store(address(fraxiversarry), bytes32(balanceSlot), bytes32(uint256(123)));
 
-        // 3) Increase numberOfTokenUnderlyingAssets to 2
-        uint256 numSlot = _stdStore.target(address(fraxiversarry)).sig("numberOfTokenUnderlyingAssets(uint256)")
-            .with_key(tokenId).find();
-
-        vm.store(address(fraxiversarry), bytes32(numSlot), bytes32(uint256(2)));
-
-        // 4) Set underlyingAssets[tokenId][1] = sfrxusd
-        uint256 underlyingSlot1 = _stdStore.target(address(fraxiversarry)).sig("underlyingAssets(uint256,uint256)")
-            .with_key(tokenId).with_key(uint256(1)).find();
-
-        vm.store(address(fraxiversarry), bytes32(underlyingSlot1), bytes32(uint256(uint160(address(sfrxusd)))));
+        // 3) ACTUALLY extend the underlyingAssets array length to 2
+        fraxiversarry._pushUnderlyingAsset(tokenId, address(sfrxusd));
 
         assertEq(fraxiversarry.erc20TransferOutNonce(tokenId), 0);
 
@@ -1795,7 +1783,7 @@ contract FraxiversarryInternalHarness is Fraxiversarry {
         return _baseURI();
     }
 
-    // === NEW: ONFT internal exposure ===
+    // === ONFT internal exposure ===
 
     function exposedBridgeBurn(address owner, uint256 tokenId) external {
         _bridgeBurn(owner, tokenId);
@@ -1830,6 +1818,11 @@ contract FraxiversarryInternalHarness is Fraxiversarry {
     // Helper to set msgInspector in tests if you want to test inspector calls
     function exposedSetMsgInspector(address inspector) external onlyOwner {
         msgInspector = inspector;
+    }
+
+    // === test-only helpers ===
+    function _pushUnderlyingAsset(uint256 tokenId, address asset) external {
+        underlyingAssets[tokenId].push(asset);
     }
 }
 
