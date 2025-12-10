@@ -41,7 +41,7 @@ This report presents the findings of a security audit conducted on the Fraxivers
 
 | Severity | Count |
 |----------|-------|
-| Critical | 1 |
+| Critical | 0 |
 | High | 2 |
 | Medium | 4 |
 | Low | 5 |
@@ -49,7 +49,7 @@ This report presents the findings of a security audit conducted on the Fraxivers
 
 ### Overall Assessment
 
-The codebase demonstrates **solid Solidity practices** with comprehensive test coverage. The contracts are well-documented with clear NatSpec comments. However, several security concerns require attention before mainnet deployment, particularly around **reentrancy protection** and **cross-chain message validation**.
+The codebase demonstrates **solid Solidity practices** with comprehensive test coverage. The contracts are well-documented with clear NatSpec comments. The `burn()` function correctly follows the Checks-Effects-Interactions pattern within `_transferHeldERC20FromToken()`, updating balances before external calls. Some security concerns require attention before mainnet deployment, particularly around **cross-chain message validation** and **ERC20 compatibility**.
 
 ---
 
@@ -89,7 +89,6 @@ The audit was conducted using the following methodology:
 
 | ID | Title | Severity | Status |
 |----|-------|----------|--------|
-| C-01 | Reentrancy vulnerability in `burn()` function | Critical | Open |
 | H-01 | Missing peer validation in cross-chain receive | High | Open |
 | H-02 | Non-standard ERC20 return values not handled | High | Open |
 | M-01 | Arbitrary token URI injection via bridge | Medium | Open |
@@ -114,98 +113,14 @@ The audit was conducted using the following methodology:
 
 ### Critical
 
-#### C-01: Reentrancy Vulnerability in `burn()` Function
+*No critical findings.*
 
-**Severity:** Critical  
-**Location:** `Fraxiversarry.sol:253-276`  
-**Status:** Open
-
-**Description:**
-
-The `burn()` function performs external ERC20 `transfer()` calls in a loop before updating critical state variables. This violates the checks-effects-interactions pattern and creates a reentrancy attack vector.
-
-```solidity
-function burn(uint256 _tokenId) public override(ERC721Burnable) {
-    if (msg.sender != ownerOf(_tokenId)) revert OnlyTokenOwnerCanBurnTheToken();
-    if (tokenTypes[_tokenId] == TokenType.FUSED) revert UnfuseTokenBeforeBurning();
-    
-    // ❌ VULNERABLE: External calls in loop before state updates
-    for (uint256 i; i < numberOfTokenUnderlyingAssets[_tokenId];) {
-        _transferHeldERC20FromToken(
-            underlyingAssets[_tokenId][i],
-            _tokenId,
-            msg.sender,
-            erc20Balances[_tokenId][underlyingAssets[_tokenId][i]]
-        );
-        unchecked { ++i; }
-    }
-    
-    // ❌ State update AFTER external calls
-    numberOfTokenUnderlyingAssets[_tokenId] = 0;
-    super.burn(_tokenId);
-    tokenTypes[_tokenId] = TokenType.NONEXISTENT;
-}
-```
-
-**Attack Scenario:**
-
-1. Attacker mints a BASE token with a malicious ERC20 that has a callback on `transfer()`
-2. Attacker calls `burn()`
-3. During the ERC20 transfer callback, attacker re-enters `burn()` or another function
-4. Depending on the state, attacker could manipulate balances or cause unexpected behavior
-
-**Impact:**
-
-- Potential double-spending of underlying ERC20 tokens
-- State corruption if re-entered during burn process
-- Loss of user funds
-
-**Recommendation:**
-
-Apply the checks-effects-interactions pattern:
-
-```solidity
-function burn(uint256 _tokenId) public override(ERC721Burnable) {
-    if (msg.sender != ownerOf(_tokenId)) revert OnlyTokenOwnerCanBurnTheToken();
-    if (tokenTypes[_tokenId] == TokenType.FUSED) revert UnfuseTokenBeforeBurning();
-    
-    // ✅ Cache values and clear state BEFORE external calls
-    uint256 numAssets = numberOfTokenUnderlyingAssets[_tokenId];
-    numberOfTokenUnderlyingAssets[_tokenId] = 0;
-    tokenTypes[_tokenId] = TokenType.NONEXISTENT;
-    
-    // Store assets to transfer
-    address[] memory assets = new address[](numAssets);
-    uint256[] memory amounts = new uint256[](numAssets);
-    for (uint256 i; i < numAssets;) {
-        assets[i] = underlyingAssets[_tokenId][i];
-        amounts[i] = erc20Balances[_tokenId][assets[i]];
-        erc20Balances[_tokenId][assets[i]] = 0;
-        unchecked { ++i; }
-    }
-    
-    // Burn first
-    super.burn(_tokenId);
-    
-    // ✅ External calls LAST
-    for (uint256 i; i < numAssets;) {
-        _transferHeldERC20FromToken(assets[i], _tokenId, msg.sender, amounts[i]);
-        unchecked { ++i; }
-    }
-}
-```
-
-Alternatively, add OpenZeppelin's `ReentrancyGuard`:
-
-```solidity
-import {ReentrancyGuard} from "openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
-
-contract Fraxiversarry is ..., ReentrancyGuard {
-    function burn(uint256 _tokenId) public override nonReentrant {
-        // existing logic
-    }
-}
-```
+> **Note:** Initial analysis flagged a potential reentrancy issue in `burn()`. Upon closer review, the `_transferHeldERC20FromToken()` function correctly follows the Checks-Effects-Interactions (CEI) pattern:
+> 1. **Check:** Verifies sufficient balance
+> 2. **Effect:** Updates `erc20Balances[_tokenId][_erc20Contract] -= _amount` and increments nonce
+> 3. **Interaction:** External `transfer()` call happens last
+> 
+> Even if a malicious ERC20 re-enters during the transfer, each asset's balance is already zeroed, preventing double-spending.
 
 ---
 
@@ -659,7 +574,6 @@ The test suite includes comprehensive coverage across:
 
 | Area | Description |
 |------|-------------|
-| Reentrancy | No tests for reentrancy attack vectors |
 | Malicious ERC20 | Limited testing with callback tokens |
 | Peer Validation | No tests for cross-chain authorization |
 | Concurrent Bridge | No multi-chain state synchronization tests |
@@ -670,23 +584,22 @@ The test suite includes comprehensive coverage across:
 
 ### Immediate Actions (Pre-Deployment)
 
-1. **[CRITICAL]** Fix reentrancy vulnerability in `burn()` function
-2. **[HIGH]** Implement SafeERC20 for all token transfers
-3. **[HIGH]** Verify and test LayerZero peer configuration
-4. **[MEDIUM]** Remove TODO comments and set production URIs
+1. **[HIGH]** Implement SafeERC20 for all token transfers
+2. **[HIGH]** Verify and test LayerZero peer configuration
+3. **[MEDIUM]** Remove TODO comments and set production URIs
 
 ### Short-Term Improvements
 
-5. Add zero-address validation in constructor
-6. Consider timestamp-based minting cutoff
-7. Document soulbound bridging behavior
-8. Add rescue function for stuck tokens
+4. Add zero-address validation in constructor
+5. Consider timestamp-based minting cutoff
+6. Document soulbound bridging behavior
+7. Add rescue function for stuck tokens
 
 ### Long-Term Enhancements
 
-9. Consider formal verification for critical functions
-10. Implement additional cross-chain state validation
-11. Add monitoring and alerting for bridge operations
+8. Consider formal verification for critical functions
+9. Implement additional cross-chain state validation
+10. Add monitoring and alerting for bridge operations
 
 ---
 
@@ -694,13 +607,15 @@ The test suite includes comprehensive coverage across:
 
 The Fraxiversarry smart contracts demonstrate **solid engineering practices** with well-structured code, comprehensive documentation, and extensive test coverage. The implementation correctly combines multiple complex features including ERC721 extensions, ERC20 tokenization, soulbound mechanics, and cross-chain bridging.
 
-However, the **Critical reentrancy vulnerability** in the `burn()` function and **High-severity issues** around ERC20 handling and cross-chain validation require immediate attention before mainnet deployment.
+Notably, the `burn()` function correctly implements the Checks-Effects-Interactions pattern within `_transferHeldERC20FromToken()`, updating balances before external calls - an important security consideration that was properly addressed.
+
+The **High-severity issues** around ERC20 handling and cross-chain validation should be addressed before mainnet deployment.
 
 ### Risk Matrix
 
 | Risk Level | Finding Count | Mitigation Priority |
 |------------|---------------|---------------------|
-| Critical | 1 | Immediate |
+| Critical | 0 | N/A |
 | High | 2 | Before Deployment |
 | Medium | 4 | Before Deployment |
 | Low | 5 | Post-Deployment OK |
@@ -708,7 +623,7 @@ However, the **Critical reentrancy vulnerability** in the `burn()` function and 
 
 ### Final Recommendation
 
-**Do not deploy to mainnet** until Critical and High severity issues are resolved. After fixes are implemented, a follow-up review is recommended to verify the changes.
+Address High and Medium severity issues before mainnet deployment. After fixes are implemented, a follow-up review is recommended to verify the changes.
 
 ---
 
