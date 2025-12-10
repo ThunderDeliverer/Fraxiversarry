@@ -319,21 +319,20 @@ contract Fraxiversarry is
     function burn(uint256 _tokenId) public override(ERC721Burnable) {
         if (msg.sender != ownerOf(_tokenId)) revert OnlyTokenOwnerCanBurnTheToken();
         if (tokenTypes[_tokenId] == TokenType.FUSED) revert UnfuseTokenBeforeBurning();
+
+        // First retrieve and delete the list of underlying assets
+        address[] memory assets = underlyingAssets[_tokenId];
+        delete underlyingAssets[_tokenId];
+
         // Transfer out the held ERC20 and then burn the NFT
-        for (uint256 i; i < underlyingAssets[_tokenId].length;) {
-            _transferHeldERC20FromToken(
-                underlyingAssets[_tokenId][i],
-                _tokenId,
-                msg.sender,
-                erc20Balances[_tokenId][underlyingAssets[_tokenId][i]]
-            );
+        for (uint256 i; i < assets.length;) {
+            _transferHeldERC20FromToken(assets[i], _tokenId, msg.sender, erc20Balances[_tokenId][assets[i]]);
 
             unchecked {
                 ++i;
             }
         }
 
-        delete underlyingAssets[_tokenId];
         super.burn(_tokenId);
         tokenTypes[_tokenId] = TokenType.NONEXISTENT;
     }
