@@ -198,9 +198,8 @@ contract Fraxiversarry is
         mintingFeeBasisPoints = 25; // 0.25%
         mintingCutoffBlock = block.number + (35 days / 2 seconds); // Approximately 5 weeks with 2s blocktime
 
-        //TODO: Set correct URIs
-        giftTokenUri = "https://gift.tba.frax/";
-        premiumTokenUri = "https://premium.tba.frax/";
+        giftTokenUri = "https://arweave.net/gv2ghexT4l3LVsheyz1MCO86yZnTFeFo__G6guMq7OE";
+        premiumTokenUri = "https://arweave.net/-pyCwZBiSn498egF8gfqrCJz4gmdVC0XxrN8wO9DuWQ";
     }
 
     /**

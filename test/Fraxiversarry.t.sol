@@ -17,6 +17,7 @@ import {IERC165} from "openzeppelin-contracts/contracts/utils/introspection/IERC
 import {IONFT721, SendParam} from "@layerzerolabs/onft-evm/contracts/onft721/interfaces/IONFT721.sol";
 import {IOAppMsgInspector} from "@layerzerolabs/oapp-evm/contracts/oapp/interfaces/IOAppMsgInspector.sol";
 import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
+import {ONFT721MsgCodec} from "@layerzerolabs/onft-evm/contracts/onft721/libs/ONFT721MsgCodec.sol";
 
 import {MockERC20} from "./mocks/MockERC20.sol";
 import {MockLzEndpoint} from "./mocks/MockLzEndpoint.sol";
@@ -27,6 +28,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     StdStorage private _stdStore;
 
     FraxiversarryInternalHarness fraxiversarry;
+    FraxiversarryInternalHarness fraxiversarryRemote;
     MockERC20 wfrax;
     MockERC20 sfrxusd;
     MockERC20 sfrxeth;
@@ -60,6 +62,9 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         // Deploy Fraxiversarry with a dedicated owner
         fraxiversarry = new FraxiversarryInternalHarness(owner, address(lzEndpoint));
+
+        // Deploy remote version of Fraxiversarry for LZ tests
+        fraxiversarryRemote = new FraxiversarryInternalHarness(owner, address(lzEndpoint));
 
         // Move mocked wFRAX to actual wFRAX address
         address wFraxAddress = fraxiversarry.WFRAX_ADDRESS();
@@ -332,7 +337,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         assertEq(tokenId, mintingLimit, "first gift tokenId should start at mintingLimit");
         assertEq(fraxiversarry.ownerOf(tokenId), alice);
         assertEq(uint256(fraxiversarry.tokenTypes(tokenId)), uint256(Fraxiversarry.TokenType.GIFT));
-        assertEq(fraxiversarry.tokenURI(tokenId), "https://gift.tba.frax/");
+        assertEq(fraxiversarry.tokenURI(tokenId), "https://arweave.net/gv2ghexT4l3LVsheyz1MCO86yZnTFeFo__G6guMq7OE");
 
         // isTransferable should be true (not soulbound)
         assertTrue(fraxiversarry.isTransferable(tokenId, alice, bob));
@@ -1764,14 +1769,151 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         fraxiversarry.paidMint(address(wfrax));
         vm.stopPrank();
     }
+
+    // ----------------------------------------------------------
+    // Gas measuring helpers
+    // ----------------------------------------------------------
+
+    function _addressToBytes32(address a) internal pure returns (bytes32) {
+        return bytes32(uint256(uint160(a)));
+    }
+
+    enum TokenScenario {
+        BASE,
+        GIFT,
+        FUSED,
+        SOULBOUND
+    }
+
+    function _buildLzMessageForScenario(Fraxiversarry src, TokenScenario scenario, uint256 tokenId, address to)
+        internal
+        view
+        returns (bytes memory msgData)
+    {
+        string memory uri = src.tokenURI(tokenId);
+
+        bool isSoulbound = (scenario == TokenScenario.SOULBOUND);
+
+        bytes memory composed = abi.encode(uri, isSoulbound);
+
+        (bytes memory message, bool hasCompose) = ONFT721MsgCodec.encode(_addressToBytes32(to), tokenId, composed);
+
+        require(hasCompose, "expected composed message");
+        return message;
+    }
+
+    function _setupScenario(TokenScenario scenario) internal returns (uint256 tokenId) {
+        if (scenario == TokenScenario.BASE) {
+            tokenId = _mintBaseWithWfrax(alice);
+        } else if (scenario == TokenScenario.GIFT) {
+            uint256 giftPrice = fraxiversarry.giftMintingPrice();
+            vm.startPrank(alice);
+            wfrax.approve(address(fraxiversarry), _total(giftPrice));
+            tokenId = fraxiversarry.giftMint(alice);
+            vm.stopPrank();
+        } else if (scenario == TokenScenario.SOULBOUND) {
+            vm.prank(owner);
+            tokenId = fraxiversarry.soulboundMint(alice, "https://premium.tba.fraxiversarry/soul-test.json");
+        } else if (scenario == TokenScenario.FUSED) {
+            (uint256 t1, uint256 t2, uint256 t3, uint256 t4) = _mintFourDifferentBases(alice);
+            vm.prank(alice);
+            tokenId = fraxiversarry.fuseTokens(t1, t2, t3, t4);
+        } else {
+            revert("unknown scenario");
+        }
+    }
+
+    function testMeasureLzReceiveGasStatsAllTokenKinds() public {
+        MockLzEndpoint dstEndpoint = new MockLzEndpoint();
+        FraxiversarryInternalHarness dst = new FraxiversarryInternalHarness(owner, address(dstEndpoint));
+
+        uint32 srcEid = 1;
+        uint64 nonce = 1;
+
+        uint256 minGas = type(uint256).max;
+        uint256 maxGas = 0;
+        uint256 sumGas = 0;
+        uint256 count = 0;
+
+        bytes32 sig = keccak256("GasMeasured(string,uint256)");
+
+        uint256 samplesPerScenario = 10;
+
+        for (uint8 scenarioRaw = 0; scenarioRaw < 4; ++scenarioRaw) {
+            TokenScenario scenario = TokenScenario(scenarioRaw);
+
+            for (uint256 s; s < samplesPerScenario; ++s) {
+                uint256 tokenId = _setupScenario(scenario);
+
+                bytes memory message = _buildLzMessageForScenario(fraxiversarry, scenario, tokenId, alice);
+
+                Origin memory origin =
+                    Origin({srcEid: srcEid, sender: bytes32(uint256(uint160(address(fraxiversarry)))), nonce: nonce++});
+
+                vm.recordLogs();
+                dst.measureLzReceive(origin, bytes32(0), message, address(0), "");
+                Vm.Log[] memory logs = vm.getRecordedLogs();
+
+                uint256 gasUsed;
+                bool found;
+
+                for (uint256 i; i < logs.length; ++i) {
+                    if (logs[i].topics[0] == sig) {
+                        (string memory tag, uint256 g) = abi.decode(logs[i].data, (string, uint256));
+                        gasUsed = g;
+                        found = true;
+                        console2.log("lzReceive gas for", tag);
+                        console2.log("scenario", uint256(scenario));
+                        console2.log("sample", s);
+                        console2.log(":", g);
+                        break;
+                    }
+                }
+                require(found, "GasMeasured not emitted");
+
+                // --- Destination-side correctness checks ---
+
+                assertEq(dst.ownerOf(tokenId), alice, "wrong owner on dst");
+
+                assertEq(dst.tokenURI(tokenId), fraxiversarry.tokenURI(tokenId), "tokenURI mismatch after bridge");
+
+                bool expectedSoulbound = (scenario == TokenScenario.SOULBOUND);
+                bool transferable = dst.isTransferable(tokenId, alice, bob);
+
+                if (expectedSoulbound) {
+                    assertFalse(transferable, "soulbound token became transferable");
+                } else {
+                    assertTrue(transferable, "non-soulbound token is not transferable");
+                }
+
+                if (gasUsed < minGas) minGas = gasUsed;
+                if (gasUsed > maxGas) maxGas = gasUsed;
+                sumGas += gasUsed;
+                ++count;
+            }
+        }
+
+        require(count > 0, "No gas samples collected");
+        uint256 avgGas = sumGas / count;
+
+        console2.log("=== lzReceive gas stats (all scenarios) ===");
+        console2.log("min gas:", minGas);
+        console2.log("max gas:", maxGas);
+        console2.log("avg gas:", avgGas);
+
+        uint256 GAS_CEILING = 250_000;
+        assertLt(maxGas, GAS_CEILING, "lzReceive gas too high in a scenario");
+    }
 }
 
 // ----------------------------------------------------------
-// Internal harness to cover ONFT internals + _increaseBalance/_baseURI
+// Internal harness to cover ONFT internals + _increaseBalance/_baseURI + estimate gas consumption for LZ config
 // ----------------------------------------------------------
 error ERC721EnumerableForbiddenBatchMint();
 
 contract FraxiversarryInternalHarness is Fraxiversarry {
+    event GasMeasured(string tag, uint256 gasUsed);
+
     constructor(address initialOwner, address lzEndpoint) Fraxiversarry(initialOwner, lzEndpoint) {}
 
     // Existing helpers
@@ -1823,6 +1965,18 @@ contract FraxiversarryInternalHarness is Fraxiversarry {
     // === test-only helpers ===
     function _pushUnderlyingAsset(uint256 tokenId, address asset) external {
         underlyingAssets[tokenId].push(asset);
+    }
+
+    function measureLzReceive(
+        Origin calldata _origin,
+        bytes32 _guid,
+        bytes calldata _message,
+        address _executor,
+        bytes calldata _executorData
+    ) external {
+        uint256 before = gasleft();
+        _lzReceive(_origin, _guid, _message, _executor, _executorData);
+        emit GasMeasured("lzReceive", before - gasleft());
     }
 }
 

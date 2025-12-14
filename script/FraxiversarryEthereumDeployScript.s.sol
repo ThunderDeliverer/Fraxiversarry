@@ -2,7 +2,7 @@
 pragma solidity ^0.8.30;
 
 import {Script, console} from "forge-std/Script.sol";
-import {Fraxiversarry} from "../src/Fraxiversarry.sol";
+import {Fraxiversarry} from "../src/FraxiversarryEthereum.sol";
 
 contract FraxiversarryDeployScript is Script {
     Fraxiversarry public fraxiversarry;
@@ -13,7 +13,7 @@ contract FraxiversarryDeployScript is Script {
 
         fraxiversarry = new Fraxiversarry(msg.sender, LZ_ENDPOINT);
 
-        console.log("Fraxiversarry deployed at:", address(fraxiversarry));
+        console.log("Ethereum Fraxiversarry deployed at:", address(fraxiversarry));
         console.log("Owner and delegate set to:", msg.sender);
         console.log("LayerZero Endpoint set to:", LZ_ENDPOINT);
 
