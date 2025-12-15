@@ -141,7 +141,7 @@ contract FraxiversarryLzConfigScript is Script {
     }
 
     function _setEnforcedOptions(address _localOnft, uint32 _remoteEid) internal {
-        bytes memory optionsTypeOne = OptionsBuilder.newOptions().addExecutorLzReceiveOption(240_000, 0);
+        bytes memory optionsTypeOne = OptionsBuilder.newOptions().addExecutorLzReceiveOption(275_000, 0);
         bytes memory optionsTypeTwo = OptionsBuilder.newOptions().addExecutorLzReceiveOption(340_000, 0);
 
         IOAppOptionsType3.EnforcedOptionParam[] memory params = new IOAppOptionsType3.EnforcedOptionParam[](2);

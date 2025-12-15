@@ -1901,7 +1901,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         console2.log("max gas:", maxGas);
         console2.log("avg gas:", avgGas);
 
-        uint256 GAS_CEILING = 250_000;
+        uint256 GAS_CEILING = 275_000;
         assertLt(maxGas, GAS_CEILING, "lzReceive gas too high in a scenario");
     }
 }
