@@ -2,7 +2,7 @@
 pragma solidity ^0.8.30;
 
 import {Script, console} from "forge-std/Script.sol";
-import {Fraxiversarry} from "../src/Fraxiversarry.sol";
+import {Fraxiversary} from "../src/Fraxiversary.sol";
 import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
 
 interface IOAppCore {
@@ -40,7 +40,7 @@ interface IMessageLibManager {
     function setConfig(address _oapp, address _lib, uint32 _eid, uint32 _configType, bytes calldata _config) external;
 }
 
-contract FraxiversarryLzConfigScript is Script {
+contract FraxiversaryLzConfigScript is Script {
     using OptionsBuilder for bytes;
 
     uint256 constant CHAINID_ETHEREUM = 1;
@@ -52,8 +52,8 @@ contract FraxiversarryLzConfigScript is Script {
     uint32 constant EID_ETHEREUM = 30101;
     uint32 constant EID_FRAXTAL = 30255;
 
-    address constant FRAXIVERSARRY_ETHEREUM = address(0); // TODO
-    address constant FRAXIVERSARRY_FRAXTAL = address(0); // TODO
+    address constant FRAXIversary_ETHEREUM = address(0); // TODO
+    address constant FRAXIversary_FRAXTAL = address(0); // TODO
 
     address constant SEND_LIB_302_ETHEREUM = 0xbB2Ea70C9E858123480642Cf96acbcCE1372dCe1;
     address constant RECEIVE_LIB_302_ETHEREUM = 0xc02Ab410f0734EFa3F14628780e6e695156024C2;
@@ -83,10 +83,10 @@ contract FraxiversarryLzConfigScript is Script {
     function _configureEthereumSide() internal {
         console.log("Configuring Ethereum connections...");
 
-        address localOnft = FRAXIVERSARRY_ETHEREUM;
+        address localOnft = FRAXIversary_ETHEREUM;
         address endpoint = ENDPOINT_ETHEREUM;
         uint32 remoteEid = EID_FRAXTAL;
-        address remoteOnft = FRAXIVERSARRY_FRAXTAL;
+        address remoteOnft = FRAXIversary_FRAXTAL;
         address sendLib302 = SEND_LIB_302_ETHEREUM;
         address recvLib302 = RECEIVE_LIB_302_ETHEREUM;
         address templateOapp = TEMPLATE_OFT_ETHEREUM;
@@ -97,10 +97,10 @@ contract FraxiversarryLzConfigScript is Script {
     function _configureFraxtalSide() internal {
         console.log("Configuring Fraxtal connections...");
 
-        address localOnft = FRAXIVERSARRY_FRAXTAL;
+        address localOnft = FRAXIversary_FRAXTAL;
         address endpoint = ENDPOINT_FRAXTAL;
         uint32 remoteEid = EID_ETHEREUM;
-        address remoteOnft = FRAXIVERSARRY_ETHEREUM;
+        address remoteOnft = FRAXIversary_ETHEREUM;
         address sendLib302 = SEND_LIB_302_FRAXTAL;
         address recvLib302 = RECEIVE_LIB_302_FRAXTAL;
         address templateOapp = TEMPLATE_OFT_FRAXTAL;

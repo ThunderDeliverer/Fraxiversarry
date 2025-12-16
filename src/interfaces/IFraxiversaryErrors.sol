@@ -10,18 +10,18 @@ pragma solidity ^0.8.30;
  * | /_/   /_/   \__,_/_/|_|  /_/   /_/_/ /_/\__,_/_/ /_/\___/\___/   |
  * |                                                                  |
  * ====================================================================
- * ===================== IFraxiversarryErrors =========================
+ * ===================== IFraxiversaryErrors =========================
  * ====================================================================
- * Errors of the Fraxiversarry NFT contract for the 5th anniversary of Frax Finance
+ * Errors of the Fraxiversary NFT contract for the 5th anniversary of Frax Finance
  * Frax Finance: https://github.com/FraxFinance
  */
 
 /**
- * @title IFraxiversarryErrors
+ * @title IFraxiversaryErrors
  * @author Frax Finance
- * @notice A collection of errors used by the Fraxiversarry NFT collection.
+ * @notice A collection of errors used by the Fraxiversary NFT collection.
  */
-contract IFraxiversarryErrors {
+contract IFraxiversaryErrors {
     /// @notice Attempted to set a mint price to the same value already stored
     error AttemptingToSetExistingMintPrice();
 

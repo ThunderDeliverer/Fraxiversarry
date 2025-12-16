@@ -5,9 +5,9 @@ import {Test, console2} from "forge-std/Test.sol";
 import {stdStorage, StdStorage} from "forge-std/StdStorage.sol";
 import {Vm} from "forge-std/Vm.sol";
 
-import {Fraxiversarry} from "../src/Fraxiversarry.sol";
-import {IFraxiversarryErrors} from "../src/interfaces/IFraxiversarryErrors.sol";
-import {IFraxiversarryEvents} from "../src/interfaces/IFraxiversarryEvents.sol";
+import {Fraxiversary} from "../src/Fraxiversary.sol";
+import {IFraxiversaryErrors} from "../src/interfaces/IFraxiversaryErrors.sol";
+import {IFraxiversaryEvents} from "../src/interfaces/IFraxiversaryEvents.sol";
 import {IERC7590} from "../src/interfaces/IERC7590.sol";
 import {IERC6454} from "../src/interfaces/IERC6454.sol";
 import {IERC4906} from "openzeppelin-contracts/contracts/interfaces/IERC4906.sol";
@@ -23,12 +23,12 @@ import {MockERC20} from "./mocks/MockERC20.sol";
 import {MockLzEndpoint} from "./mocks/MockLzEndpoint.sol";
 import {MockMsgInspector} from "./mocks/MockMsgInspector.sol";
 
-contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
+contract FraxiversaryTest is Test, IFraxiversaryErrors, IFraxiversaryEvents {
     using stdStorage for StdStorage;
     StdStorage private _stdStore;
 
-    FraxiversarryInternalHarness fraxiversarry;
-    FraxiversarryInternalHarness fraxiversarryRemote;
+    FraxiversaryInternalHarness fraxiversary;
+    FraxiversaryInternalHarness fraxiversaryRemote;
     MockERC20 wfrax;
     MockERC20 sfrxusd;
     MockERC20 sfrxeth;
@@ -60,14 +60,14 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         fpi = new MockERC20("Frax Price Index", "FPI");
         lzEndpoint = new MockLzEndpoint();
 
-        // Deploy Fraxiversarry with a dedicated owner
-        fraxiversarry = new FraxiversarryInternalHarness(owner, address(lzEndpoint));
+        // Deploy Fraxiversary with a dedicated owner
+        fraxiversary = new FraxiversaryInternalHarness(owner, address(lzEndpoint));
 
-        // Deploy remote version of Fraxiversarry for LZ tests
-        fraxiversarryRemote = new FraxiversarryInternalHarness(owner, address(lzEndpoint));
+        // Deploy remote version of Fraxiversary for LZ tests
+        fraxiversaryRemote = new FraxiversaryInternalHarness(owner, address(lzEndpoint));
 
         // Move mocked wFRAX to actual wFRAX address
-        address wFraxAddress = fraxiversarry.WFRAX_ADDRESS();
+        address wFraxAddress = fraxiversary.WFRAX_ADDRESS();
         vm.etch(wFraxAddress, address(wfrax).code);
         wfrax = MockERC20(wFraxAddress);
 
@@ -79,20 +79,20 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         // Owner sets mint prices and URIs
         vm.startPrank(owner);
-        fraxiversarry.updateBaseAssetMintPrice(address(wfrax), WFRAX_PRICE);
-        fraxiversarry.updateBaseAssetMintPrice(address(sfrxusd), SFRXUSD_PRICE);
-        fraxiversarry.updateBaseAssetMintPrice(address(sfrxeth), SFRXETH_PRICE);
-        fraxiversarry.updateBaseAssetMintPrice(address(fpi), FPI_PRICE);
+        fraxiversary.updateBaseAssetMintPrice(address(wfrax), WFRAX_PRICE);
+        fraxiversary.updateBaseAssetMintPrice(address(sfrxusd), SFRXUSD_PRICE);
+        fraxiversary.updateBaseAssetMintPrice(address(sfrxeth), SFRXETH_PRICE);
+        fraxiversary.updateBaseAssetMintPrice(address(fpi), FPI_PRICE);
 
-        fraxiversarry.setBaseAssetTokenUri(address(wfrax), "https://tba.fraxiversarry/wfrax.json");
-        fraxiversarry.setBaseAssetTokenUri(address(sfrxusd), "https://tba.fraxiversarry/sfrxusd.json");
-        fraxiversarry.setBaseAssetTokenUri(address(sfrxeth), "https://tba.fraxiversarry/sfrxeth.json");
-        fraxiversarry.setBaseAssetTokenUri(address(fpi), "https://tba.fraxiversarry/fpi.json");
+        fraxiversary.setBaseAssetTokenUri(address(wfrax), "https://tba.fraxiversary/wfrax.json");
+        fraxiversary.setBaseAssetTokenUri(address(sfrxusd), "https://tba.fraxiversary/sfrxusd.json");
+        fraxiversary.setBaseAssetTokenUri(address(sfrxeth), "https://tba.fraxiversary/sfrxeth.json");
+        fraxiversary.setBaseAssetTokenUri(address(fpi), "https://tba.fraxiversary/fpi.json");
         vm.stopPrank();
     }
 
     function _fee(uint256 amount) internal view returns (uint256) {
-        return (amount * fraxiversarry.mintingFeeBasisPoints()) / fraxiversarry.MAX_BASIS_POINTS();
+        return (amount * fraxiversary.mintingFeeBasisPoints()) / fraxiversary.MAX_BASIS_POINTS();
     }
 
     function _total(uint256 amount) internal view returns (uint256) {
@@ -100,9 +100,9 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     }
 
     function _approveWithFee(address user, MockERC20 token) internal {
-        (,, uint256 totalAmount) = fraxiversarry.getMintingPriceWithFee(address(token));
+        (,, uint256 totalAmount) = fraxiversary.getMintingPriceWithFee(address(token));
         vm.prank(user);
-        token.approve(address(fraxiversarry), totalAmount);
+        token.approve(address(fraxiversary), totalAmount);
     }
 
     // ----------------------------------------------------------
@@ -110,22 +110,22 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     // ----------------------------------------------------------
 
     function testConstructorInitialState() public {
-        assertEq(fraxiversarry.name(), "Fraxiversarry");
-        assertEq(fraxiversarry.symbol(), "FRAX5Y");
-        assertEq(fraxiversarry.mintingLimit(), 12000);
-        assertEq(fraxiversarry.giftMintingLimit(), 50000);
-        assertEq(fraxiversarry.giftMintingPrice(), 50 * 1e18);
+        assertEq(fraxiversary.name(), "Fraxiversary");
+        assertEq(fraxiversary.symbol(), "FRAX5Y");
+        assertEq(fraxiversary.mintingLimit(), 12000);
+        assertEq(fraxiversary.giftMintingLimit(), 50000);
+        assertEq(fraxiversary.giftMintingPrice(), 50 * 1e18);
 
         // First soulbound token should use tokenId == mintingLimit (62000)
         vm.startPrank(owner);
-        fraxiversarry.setPremiumTokenUri("https://premium.tba.fraxiversarry/custom.json");
-        uint256 sbId = fraxiversarry.soulboundMint(alice, "https://premium.tba.fraxiversarry/custom.json");
+        fraxiversary.setPremiumTokenUri("https://premium.tba.fraxiversary/custom.json");
+        uint256 sbId = fraxiversary.soulboundMint(alice, "https://premium.tba.fraxiversary/custom.json");
         vm.stopPrank();
 
-        assertEq(sbId, fraxiversarry.mintingLimit() + fraxiversarry.giftMintingLimit());
-        assertEq(fraxiversarry.ownerOf(sbId), alice);
-        assertEq(fraxiversarry.tokenURI(sbId), "https://premium.tba.fraxiversarry/custom.json");
-        assertEq(uint256(fraxiversarry.tokenTypes(sbId)), uint256(Fraxiversarry.TokenType.SOULBOUND));
+        assertEq(sbId, fraxiversary.mintingLimit() + fraxiversary.giftMintingLimit());
+        assertEq(fraxiversary.ownerOf(sbId), alice);
+        assertEq(fraxiversary.tokenURI(sbId), "https://premium.tba.fraxiversary/custom.json");
+        assertEq(uint256(fraxiversary.tokenTypes(sbId)), uint256(Fraxiversary.TokenType.SOULBOUND));
     }
 
     // ----------------------------------------------------------
@@ -136,7 +136,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         // wFRAX, sfrxUSD, sfrxETH, FPI were already set in setUp()
 
         // Check getSupportedErc20s
-        (address[] memory tokens, uint256[] memory prices) = fraxiversarry.getSupportedErc20s();
+        (address[] memory tokens, uint256[] memory prices) = fraxiversary.getSupportedErc20s();
         assertEq(tokens.length, 4);
         assertEq(tokens[0], address(wfrax));
         assertEq(tokens[1], address(sfrxusd));
@@ -149,14 +149,14 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         // Change price for wFRAX
         vm.prank(owner);
-        fraxiversarry.updateBaseAssetMintPrice(address(wfrax), 150e18);
-        assertEq(fraxiversarry.mintPrices(address(wfrax)), 150e18);
+        fraxiversary.updateBaseAssetMintPrice(address(wfrax), 150e18);
+        assertEq(fraxiversary.mintPrices(address(wfrax)), 150e18);
 
         // Remove sfrxUSD by setting price to 0
         vm.prank(owner);
-        fraxiversarry.updateBaseAssetMintPrice(address(sfrxusd), 0);
+        fraxiversary.updateBaseAssetMintPrice(address(sfrxusd), 0);
 
-        (tokens, prices) = fraxiversarry.getSupportedErc20s();
+        (tokens, prices) = fraxiversary.getSupportedErc20s();
         assertEq(tokens.length, 3);
         // Order is not guaranteed; just assert contents
         bool foundWfrax = false;
@@ -181,13 +181,13 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         assertTrue(foundFpi);
 
         // supportedErc20s[lastIndex] should be zeroed
-        assertEq(fraxiversarry.supportedErc20s(fraxiversarry.totalNumberOfSupportedErc20s()), address(0));
+        assertEq(fraxiversary.supportedErc20s(fraxiversary.totalNumberOfSupportedErc20s()), address(0));
     }
 
     function testUpdateBaseAssetMintPriceRevertsOnSamePrice() public {
         vm.prank(owner);
         vm.expectRevert(AttemptingToSetExistingMintPrice.selector);
-        fraxiversarry.updateBaseAssetMintPrice(address(wfrax), WFRAX_PRICE);
+        fraxiversary.updateBaseAssetMintPrice(address(wfrax), WFRAX_PRICE);
     }
 
     // ----------------------------------------------------------
@@ -198,15 +198,15 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         _approveWithFee(minter, wfrax);
 
         vm.prank(minter);
-        tokenId = fraxiversarry.paidMint(address(wfrax));
+        tokenId = fraxiversary.paidMint(address(wfrax));
     }
 
     function testPaidMintBaseTokenHappyPath() public {
         // Record logs around the mint call
         vm.startPrank(alice);
-        wfrax.approve(address(fraxiversarry), _total(WFRAX_PRICE));
+        wfrax.approve(address(fraxiversary), _total(WFRAX_PRICE));
         vm.recordLogs();
-        uint256 tokenId = fraxiversarry.paidMint(address(wfrax));
+        uint256 tokenId = fraxiversary.paidMint(address(wfrax));
         Vm.Log[] memory logs = vm.getRecordedLogs();
         vm.stopPrank();
 
@@ -237,23 +237,23 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         // ---- State assertions ----
         assertEq(tokenId, 0);
-        assertEq(fraxiversarry.ownerOf(tokenId), alice);
-        assertEq(fraxiversarry.tokenURI(tokenId), "https://tba.fraxiversarry/wfrax.json");
-        assertEq(uint256(fraxiversarry.tokenTypes(tokenId)), uint256(Fraxiversarry.TokenType.BASE));
+        assertEq(fraxiversary.ownerOf(tokenId), alice);
+        assertEq(fraxiversary.tokenURI(tokenId), "https://tba.fraxiversary/wfrax.json");
+        assertEq(uint256(fraxiversary.tokenTypes(tokenId)), uint256(Fraxiversary.TokenType.BASE));
 
         // ERC20 balances
         uint256 fee = _fee(WFRAX_PRICE);
 
-        assertEq(fraxiversarry.erc20Balances(tokenId, address(wfrax)), WFRAX_PRICE);
+        assertEq(fraxiversary.erc20Balances(tokenId, address(wfrax)), WFRAX_PRICE);
         assertEq(wfrax.balanceOf(alice), 1e22 - WFRAX_PRICE - fee);
-        assertEq(wfrax.balanceOf(address(fraxiversarry)), WFRAX_PRICE + fee);
-        assertEq(fraxiversarry.collectedFees(address(wfrax)), fee);
+        assertEq(wfrax.balanceOf(address(fraxiversary)), WFRAX_PRICE + fee);
+        assertEq(fraxiversary.collectedFees(address(wfrax)), fee);
 
         // underlying assets
-        assertEq(fraxiversarry.underlyingAssets(tokenId, 0), address(wfrax));
+        assertEq(fraxiversary.underlyingAssets(tokenId, 0), address(wfrax));
 
         // isTransferable should be true for BASE
-        assertTrue(fraxiversarry.isTransferable(tokenId, alice, bob));
+        assertTrue(fraxiversary.isTransferable(tokenId, alice, bob));
     }
 
     function testPaidMintRevertsForUnsupportedToken() public {
@@ -261,9 +261,9 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         random.mint(alice, 1e18);
 
         vm.startPrank(alice);
-        random.approve(address(fraxiversarry), 1e18);
+        random.approve(address(fraxiversary), 1e18);
         vm.expectRevert(UnsupportedToken.selector);
-        fraxiversarry.paidMint(address(random));
+        fraxiversary.paidMint(address(random));
         vm.stopPrank();
     }
 
@@ -271,7 +271,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         // no approve
         vm.startPrank(alice);
         vm.expectRevert(InsufficientAllowance.selector);
-        fraxiversarry.paidMint(address(wfrax));
+        fraxiversary.paidMint(address(wfrax));
         vm.stopPrank();
     }
 
@@ -280,9 +280,9 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         // move alice’s wFRAX away, then try to mint
         wfrax.transfer(bob, wfrax.balanceOf(alice));
 
-        wfrax.approve(address(fraxiversarry), _total(WFRAX_PRICE));
+        wfrax.approve(address(fraxiversary), _total(WFRAX_PRICE));
         vm.expectRevert(InsufficientBalance.selector);
-        fraxiversarry.paidMint(address(wfrax));
+        fraxiversary.paidMint(address(wfrax));
         vm.stopPrank();
     }
 
@@ -291,63 +291,63 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         wfrax.setFailTransferFrom(true);
 
         vm.startPrank(alice);
-        wfrax.approve(address(fraxiversarry), _total(WFRAX_PRICE));
+        wfrax.approve(address(fraxiversary), _total(WFRAX_PRICE));
         vm.expectRevert(TransferFailed.selector);
-        fraxiversarry.paidMint(address(wfrax));
+        fraxiversary.paidMint(address(wfrax));
         vm.stopPrank();
     }
 
     function testPaidMintRevertsWhenMintingLimitReached() public {
         // Make wFRAX cheap
         vm.prank(owner);
-        fraxiversarry.updateBaseAssetMintPrice(address(wfrax), 1);
+        fraxiversary.updateBaseAssetMintPrice(address(wfrax), 1);
 
         // Overwrite mintingLimit to 1 using stdStorage
-        uint256 slot = _stdStore.target(address(fraxiversarry)).sig("mintingLimit()").find();
+        uint256 slot = _stdStore.target(address(fraxiversary)).sig("mintingLimit()").find();
 
-        vm.store(address(fraxiversarry), bytes32(slot), bytes32(uint256(1)));
+        vm.store(address(fraxiversary), bytes32(slot), bytes32(uint256(1)));
 
         vm.startPrank(alice);
-        wfrax.approve(address(fraxiversarry), 2);
+        wfrax.approve(address(fraxiversary), 2);
 
         // First mint succeeds
-        fraxiversarry.paidMint(address(wfrax));
+        fraxiversary.paidMint(address(wfrax));
 
         // Second mint hits _nextTokenId >= mintingLimit and reverts
         vm.expectRevert(MintingLimitReached.selector);
-        fraxiversarry.paidMint(address(wfrax));
+        fraxiversary.paidMint(address(wfrax));
         vm.stopPrank();
     }
 
     function testGiftMintHappyPath() public {
-        uint256 mintingLimit = fraxiversarry.mintingLimit();
-        uint256 giftPrice = fraxiversarry.giftMintingPrice();
+        uint256 mintingLimit = fraxiversary.mintingLimit();
+        uint256 giftPrice = fraxiversary.giftMintingPrice();
         uint256 fee = _fee(giftPrice);
 
         // Alice approves enough wFRAX for at least one gift mint
         vm.startPrank(alice);
-        wfrax.approve(address(fraxiversarry), _total(giftPrice));
+        wfrax.approve(address(fraxiversary), _total(giftPrice));
         // Record logs so we can validate ReceivedERC20
         vm.recordLogs();
-        uint256 tokenId = fraxiversarry.giftMint(alice);
+        uint256 tokenId = fraxiversary.giftMint(alice);
         Vm.Log[] memory logs = vm.getRecordedLogs();
         vm.stopPrank();
 
         // --- Basic properties ---
         assertEq(tokenId, mintingLimit, "first gift tokenId should start at mintingLimit");
-        assertEq(fraxiversarry.ownerOf(tokenId), alice);
-        assertEq(uint256(fraxiversarry.tokenTypes(tokenId)), uint256(Fraxiversarry.TokenType.GIFT));
-        assertEq(fraxiversarry.tokenURI(tokenId), "https://arweave.net/gv2ghexT4l3LVsheyz1MCO86yZnTFeFo__G6guMq7OE");
+        assertEq(fraxiversary.ownerOf(tokenId), alice);
+        assertEq(uint256(fraxiversary.tokenTypes(tokenId)), uint256(Fraxiversary.TokenType.GIFT));
+        assertEq(fraxiversary.tokenURI(tokenId), "https://arweave.net/gv2ghexT4l3LVsheyz1MCO86yZnTFeFo__G6guMq7OE");
 
         // isTransferable should be true (not soulbound)
-        assertTrue(fraxiversarry.isTransferable(tokenId, alice, bob));
+        assertTrue(fraxiversary.isTransferable(tokenId, alice, bob));
 
         // --- Underlying asset / balances ---
-        assertEq(fraxiversarry.underlyingAssets(tokenId, 0), address(wfrax), "gift underlying asset");
-        assertEq(fraxiversarry.erc20Balances(tokenId, address(wfrax)), giftPrice, "gift token internal balance");
+        assertEq(fraxiversary.underlyingAssets(tokenId, 0), address(wfrax), "gift underlying asset");
+        assertEq(fraxiversary.erc20Balances(tokenId, address(wfrax)), giftPrice, "gift token internal balance");
 
         // External ERC20 balances
-        assertEq(wfrax.balanceOf(address(fraxiversarry)), giftPrice + fee, "contract should hold giftPrice");
+        assertEq(wfrax.balanceOf(address(fraxiversary)), giftPrice + fee, "contract should hold giftPrice");
         assertEq(wfrax.balanceOf(alice), 1e22 - giftPrice - fee, "alice should be debited giftPrice");
 
         // --- Check ReceivedERC20 event ---
@@ -377,13 +377,13 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     }
 
     function testGiftMintEmitsGiftMintedEvent() public {
-        uint256 giftPrice = fraxiversarry.giftMintingPrice();
-        uint256 mintingLimit = fraxiversarry.mintingLimit();
+        uint256 giftPrice = fraxiversary.giftMintingPrice();
+        uint256 mintingLimit = fraxiversary.mintingLimit();
 
         vm.startPrank(alice);
-        wfrax.approve(address(fraxiversarry), _total(giftPrice));
+        wfrax.approve(address(fraxiversary), _total(giftPrice));
         vm.recordLogs();
-        uint256 tokenId = fraxiversarry.giftMint(bob);
+        uint256 tokenId = fraxiversary.giftMint(bob);
         Vm.Log[] memory logs = vm.getRecordedLogs();
         vm.stopPrank();
 
@@ -415,64 +415,64 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         // (she already has 1e22 from setUp)
         vm.prank(alice);
         vm.expectRevert(InsufficientAllowance.selector);
-        fraxiversarry.giftMint(alice);
+        fraxiversary.giftMint(alice);
     }
 
     function testGiftMintRevertsOnInsufficientBalance() public {
-        uint256 giftPrice = fraxiversarry.giftMintingPrice();
+        uint256 giftPrice = fraxiversary.giftMintingPrice();
 
         // Approve, then move all tokens away so balance < giftPrice
         vm.startPrank(alice);
-        wfrax.approve(address(fraxiversarry), _total(giftPrice));
+        wfrax.approve(address(fraxiversary), _total(giftPrice));
         wfrax.transfer(bob, wfrax.balanceOf(alice));
 
         vm.expectRevert(InsufficientBalance.selector);
-        fraxiversarry.giftMint(alice);
+        fraxiversary.giftMint(alice);
         vm.stopPrank();
     }
 
     function testGiftMintRevertsOnTransferFailed() public {
-        uint256 giftPrice = fraxiversarry.giftMintingPrice();
+        uint256 giftPrice = fraxiversary.giftMintingPrice();
 
         vm.startPrank(alice);
-        wfrax.approve(address(fraxiversarry), _total(giftPrice));
+        wfrax.approve(address(fraxiversary), _total(giftPrice));
         wfrax.setFailTransferFrom(true);
 
         vm.expectRevert(TransferFailed.selector);
-        fraxiversarry.giftMint(alice);
+        fraxiversary.giftMint(alice);
         vm.stopPrank();
     }
 
     function testGiftMintRevertsWhenGiftMintingLimitReached() public {
         // Shrink giftMintingLimit to 1 so the second mint hits the limit
-        uint256 slot = _stdStore.target(address(fraxiversarry)).sig("giftMintingLimit()").find();
+        uint256 slot = _stdStore.target(address(fraxiversary)).sig("giftMintingLimit()").find();
 
-        vm.store(address(fraxiversarry), bytes32(slot), bytes32(uint256(1)));
+        vm.store(address(fraxiversary), bytes32(slot), bytes32(uint256(1)));
 
-        uint256 giftPrice = fraxiversarry.giftMintingPrice();
+        uint256 giftPrice = fraxiversary.giftMintingPrice();
 
         vm.startPrank(alice);
         // Give a large allowance so both calls pass allowance check
-        wfrax.approve(address(fraxiversarry), _total(giftPrice) * 2);
+        wfrax.approve(address(fraxiversary), _total(giftPrice) * 2);
 
         // First gift mint succeeds
-        fraxiversarry.giftMint(alice);
+        fraxiversary.giftMint(alice);
 
         // Second must revert with GiftMintingLimitReached
         vm.expectRevert(GiftMintingLimitReached.selector);
-        fraxiversarry.giftMint(alice);
+        fraxiversary.giftMint(alice);
         vm.stopPrank();
     }
 
     function testGetUnderlyingBalancesForGiftTokenBehavesLikeBase() public {
-        uint256 giftPrice = fraxiversarry.giftMintingPrice();
+        uint256 giftPrice = fraxiversary.giftMintingPrice();
 
         vm.startPrank(alice);
-        wfrax.approve(address(fraxiversarry), _total(giftPrice));
-        uint256 tokenId = fraxiversarry.giftMint(alice);
+        wfrax.approve(address(fraxiversary), _total(giftPrice));
+        uint256 tokenId = fraxiversary.giftMint(alice);
         vm.stopPrank();
 
-        (address[] memory erc20s, uint256[] memory balances) = fraxiversarry.getUnderlyingBalances(tokenId);
+        (address[] memory erc20s, uint256[] memory balances) = fraxiversary.getUnderlyingBalances(tokenId);
 
         assertEq(erc20s.length, 1);
         assertEq(balances.length, 1);
@@ -481,7 +481,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     }
 
     function testGetUnderlyingTokenIdsForNeverFusedReturnsZeros() public {
-        (uint256 a, uint256 b, uint256 c, uint256 d) = fraxiversarry.getUnderlyingTokenIds(999999);
+        (uint256 a, uint256 b, uint256 c, uint256 d) = fraxiversary.getUnderlyingTokenIds(999999);
         assertEq(a, 0);
         assertEq(b, 0);
         assertEq(c, 0);
@@ -494,35 +494,35 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
     function testSoulboundMintAndNonTransferable() public {
         vm.startPrank(owner);
-        uint256 sbId = fraxiversarry.soulboundMint(alice, "https://premium.tba.fraxiversarry/sb1.json");
+        uint256 sbId = fraxiversary.soulboundMint(alice, "https://premium.tba.fraxiversary/sb1.json");
         vm.stopPrank();
 
-        assertEq(fraxiversarry.ownerOf(sbId), alice);
-        assertEq(uint256(fraxiversarry.tokenTypes(sbId)), uint256(Fraxiversarry.TokenType.SOULBOUND));
-        assertTrue(!fraxiversarry.isTransferable(sbId, alice, bob)); // IERC6454
+        assertEq(fraxiversary.ownerOf(sbId), alice);
+        assertEq(uint256(fraxiversary.tokenTypes(sbId)), uint256(Fraxiversary.TokenType.SOULBOUND));
+        assertTrue(!fraxiversary.isTransferable(sbId, alice, bob)); // IERC6454
 
         // Attempting to transfer should revert with CannotTransferSoulboundToken
         vm.startPrank(alice);
         vm.expectRevert(CannotTransferSoulboundToken.selector);
-        fraxiversarry.transferFrom(alice, bob, sbId);
+        fraxiversary.transferFrom(alice, bob, sbId);
         vm.stopPrank();
     }
 
     function testSoulboundMintOnlyOwner() public {
         vm.prank(alice);
         vm.expectRevert(); // Ownable: caller is not the owner
-        fraxiversarry.soulboundMint(alice, "uri");
+        fraxiversary.soulboundMint(alice, "uri");
     }
 
     function testBurnSoulboundReverts() public {
         vm.startPrank(owner);
-        uint256 sbId = fraxiversarry.soulboundMint(alice, "uri");
+        uint256 sbId = fraxiversary.soulboundMint(alice, "uri");
         vm.stopPrank();
 
         vm.startPrank(alice);
         // Burn calls _update(to=address(0)), which triggers _soulboundCheck and reverts
         vm.expectRevert(CannotTransferSoulboundToken.selector);
-        fraxiversarry.burn(sbId);
+        fraxiversary.burn(sbId);
         vm.stopPrank();
     }
 
@@ -534,11 +534,11 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         uint256 tokenId = _mintBaseWithWfrax(alice);
 
         uint256 preAliceFraxBalance = wfrax.balanceOf(alice);
-        uint256 preContractBalance = wfrax.balanceOf(address(fraxiversarry));
+        uint256 preContractBalance = wfrax.balanceOf(address(fraxiversary));
 
         vm.startPrank(alice);
         vm.recordLogs();
-        fraxiversarry.burn(tokenId);
+        fraxiversary.burn(tokenId);
         Vm.Log[] memory logs = vm.getRecordedLogs();
         vm.stopPrank();
 
@@ -567,13 +567,13 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         // Token non-existent
         vm.expectRevert(); // ERC721NonexistentToken
-        fraxiversarry.ownerOf(tokenId);
-        assertEq(uint256(fraxiversarry.tokenTypes(tokenId)), uint256(Fraxiversarry.TokenType.NONEXISTENT));
+        fraxiversary.ownerOf(tokenId);
+        assertEq(uint256(fraxiversary.tokenTypes(tokenId)), uint256(Fraxiversary.TokenType.NONEXISTENT));
 
         // ERC20 balances: user got tokens back
         assertEq(wfrax.balanceOf(alice), preAliceFraxBalance + WFRAX_PRICE);
-        assertEq(wfrax.balanceOf(address(fraxiversarry)), preContractBalance - WFRAX_PRICE);
-        assertEq(fraxiversarry.erc20Balances(tokenId, address(wfrax)), 0);
+        assertEq(wfrax.balanceOf(address(fraxiversary)), preContractBalance - WFRAX_PRICE);
+        assertEq(fraxiversary.erc20Balances(tokenId, address(wfrax)), 0);
     }
 
     function testBurnBaseRevertsIfTransferOfUnderlyingFails() public {
@@ -584,7 +584,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         vm.startPrank(alice);
         vm.expectRevert(TransferFailed.selector);
-        fraxiversarry.burn(tokenId);
+        fraxiversary.burn(tokenId);
         vm.stopPrank();
     }
 
@@ -592,7 +592,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         uint256 tokenId = _mintBaseWithWfrax(alice);
         vm.startPrank(bob);
         vm.expectRevert(OnlyTokenOwnerCanBurnTheToken.selector);
-        fraxiversarry.burn(tokenId);
+        fraxiversary.burn(tokenId);
         vm.stopPrank();
     }
 
@@ -603,17 +603,17 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     function _mintFourDifferentBases(address minter) internal returns (uint256 t1, uint256 t2, uint256 t3, uint256 t4) {
         vm.startPrank(minter);
 
-        wfrax.approve(address(fraxiversarry), _total(WFRAX_PRICE));
-        t1 = fraxiversarry.paidMint(address(wfrax));
+        wfrax.approve(address(fraxiversary), _total(WFRAX_PRICE));
+        t1 = fraxiversary.paidMint(address(wfrax));
 
-        sfrxusd.approve(address(fraxiversarry), _total(SFRXUSD_PRICE));
-        t2 = fraxiversarry.paidMint(address(sfrxusd));
+        sfrxusd.approve(address(fraxiversary), _total(SFRXUSD_PRICE));
+        t2 = fraxiversary.paidMint(address(sfrxusd));
 
-        sfrxeth.approve(address(fraxiversarry), _total(SFRXETH_PRICE));
-        t3 = fraxiversarry.paidMint(address(sfrxeth));
+        sfrxeth.approve(address(fraxiversary), _total(SFRXETH_PRICE));
+        t3 = fraxiversary.paidMint(address(sfrxeth));
 
-        fpi.approve(address(fraxiversarry), _total(FPI_PRICE));
-        t4 = fraxiversarry.paidMint(address(fpi));
+        fpi.approve(address(fraxiversary), _total(FPI_PRICE));
+        t4 = fraxiversary.paidMint(address(fpi));
 
         vm.stopPrank();
     }
@@ -624,7 +624,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         // Record all logs emitted during fuse
         vm.recordLogs();
         vm.prank(alice);
-        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3, t4);
+        uint256 premiumId = fraxiversary.fuseTokens(t1, t2, t3, t4);
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
         // event TokenFused(address indexed owner, uint256 underlyingToken1, uint256 underlyingToken2,
@@ -661,25 +661,25 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         // ---- State checks ----
 
-        assertEq(premiumId, fraxiversarry.mintingLimit() + fraxiversarry.giftMintingLimit());
-        assertEq(fraxiversarry.ownerOf(premiumId), alice);
-        assertEq(uint256(fraxiversarry.tokenTypes(premiumId)), uint256(Fraxiversarry.TokenType.FUSED));
+        assertEq(premiumId, fraxiversary.mintingLimit() + fraxiversary.giftMintingLimit());
+        assertEq(fraxiversary.ownerOf(premiumId), alice);
+        assertEq(uint256(fraxiversary.tokenTypes(premiumId)), uint256(Fraxiversary.TokenType.FUSED));
 
         // underlyingTokenIds mapping
-        (uint256 u1, uint256 u2, uint256 u3, uint256 u4) = fraxiversarry.getUnderlyingTokenIds(premiumId);
+        (uint256 u1, uint256 u2, uint256 u3, uint256 u4) = fraxiversary.getUnderlyingTokenIds(premiumId);
         assertEq(u1, t1);
         assertEq(u2, t2);
         assertEq(u3, t3);
         assertEq(u4, t4);
 
         // Base tokens are now held by the contract
-        assertEq(fraxiversarry.ownerOf(t1), address(fraxiversarry));
-        assertEq(fraxiversarry.ownerOf(t2), address(fraxiversarry));
-        assertEq(fraxiversarry.ownerOf(t3), address(fraxiversarry));
-        assertEq(fraxiversarry.ownerOf(t4), address(fraxiversarry));
+        assertEq(fraxiversary.ownerOf(t1), address(fraxiversary));
+        assertEq(fraxiversary.ownerOf(t2), address(fraxiversary));
+        assertEq(fraxiversary.ownerOf(t3), address(fraxiversary));
+        assertEq(fraxiversary.ownerOf(t4), address(fraxiversary));
 
         // getUnderlyingBalances on FUSED token proxies to underlying base tokens
-        (address[] memory erc20s, uint256[] memory balances) = fraxiversarry.getUnderlyingBalances(premiumId);
+        (address[] memory erc20s, uint256[] memory balances) = fraxiversary.getUnderlyingBalances(premiumId);
         assertEq(erc20s.length, 4);
         assertEq(balances.length, 4);
 
@@ -699,11 +699,11 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         // Transfer one token to bob
         vm.prank(alice);
-        fraxiversarry.transferFrom(alice, bob, t4);
+        fraxiversary.transferFrom(alice, bob, t4);
 
         vm.prank(alice);
         vm.expectRevert(OnlyTokenOwnerCanFuseTokens.selector);
-        fraxiversarry.fuseTokens(t1, t2, t3, t4);
+        fraxiversary.fuseTokens(t1, t2, t3, t4);
     }
 
     function testFuseTokensRevertsIfNotBaseType() public {
@@ -712,53 +712,53 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         // Fuse them into a premium token
         vm.prank(alice);
-        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3, t4);
+        uint256 premiumId = fraxiversary.fuseTokens(t1, t2, t3, t4);
 
         // Mint three additional base NFTs for alice (t5, t6, t7)
         vm.startPrank(alice);
-        wfrax.approve(address(fraxiversarry), _total(WFRAX_PRICE));
-        uint256 t5 = fraxiversarry.paidMint(address(wfrax));
+        wfrax.approve(address(fraxiversary), _total(WFRAX_PRICE));
+        uint256 t5 = fraxiversary.paidMint(address(wfrax));
 
-        sfrxusd.approve(address(fraxiversarry), _total(SFRXUSD_PRICE));
-        uint256 t6 = fraxiversarry.paidMint(address(sfrxusd));
+        sfrxusd.approve(address(fraxiversary), _total(SFRXUSD_PRICE));
+        uint256 t6 = fraxiversary.paidMint(address(sfrxusd));
 
-        sfrxeth.approve(address(fraxiversarry), _total(SFRXETH_PRICE));
-        uint256 t7 = fraxiversarry.paidMint(address(sfrxeth));
+        sfrxeth.approve(address(fraxiversary), _total(SFRXETH_PRICE));
+        uint256 t7 = fraxiversary.paidMint(address(sfrxeth));
         vm.stopPrank();
 
         // premiumId is FUSED, others are BASE -> should revert with CanOnlyFuseBaseTokens
         vm.prank(alice);
         vm.expectRevert(CanOnlyFuseBaseTokens.selector);
-        fraxiversarry.fuseTokens(premiumId, t5, t6, t7);
+        fraxiversary.fuseTokens(premiumId, t5, t6, t7);
     }
 
     function testFuseTokensRevertsIfAnyUnderlyingAssetDuplicates() public {
         // Mint four base tokens all with same underlying asset (wFRAX)
         vm.prank(owner);
-        fraxiversarry.updateBaseAssetMintPrice(address(sfrxusd), WFRAX_PRICE);
+        fraxiversary.updateBaseAssetMintPrice(address(sfrxusd), WFRAX_PRICE);
 
         vm.startPrank(alice);
-        wfrax.approve(address(fraxiversarry), _total(WFRAX_PRICE) * 4);
-        uint256 t1 = fraxiversarry.paidMint(address(wfrax));
-        uint256 t2 = fraxiversarry.paidMint(address(wfrax));
-        uint256 t3 = fraxiversarry.paidMint(address(wfrax));
-        uint256 t4 = fraxiversarry.paidMint(address(wfrax));
+        wfrax.approve(address(fraxiversary), _total(WFRAX_PRICE) * 4);
+        uint256 t1 = fraxiversary.paidMint(address(wfrax));
+        uint256 t2 = fraxiversary.paidMint(address(wfrax));
+        uint256 t3 = fraxiversary.paidMint(address(wfrax));
+        uint256 t4 = fraxiversary.paidMint(address(wfrax));
         vm.stopPrank();
 
         vm.prank(alice);
         vm.expectRevert(SameTokenUnderlyingAssets.selector);
-        fraxiversarry.fuseTokens(t1, t2, t3, t4);
+        fraxiversary.fuseTokens(t1, t2, t3, t4);
     }
 
     function testUnfuseTokensHappyPath() public {
         (uint256 t1, uint256 t2, uint256 t3, uint256 t4) = _mintFourDifferentBases(alice);
 
         vm.prank(alice);
-        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3, t4);
+        uint256 premiumId = fraxiversary.fuseTokens(t1, t2, t3, t4);
 
         vm.recordLogs();
         vm.prank(alice);
-        (uint256 r1, uint256 r2, uint256 r3, uint256 r4) = fraxiversarry.unfuseTokens(premiumId);
+        (uint256 r1, uint256 r2, uint256 r3, uint256 r4) = fraxiversary.unfuseTokens(premiumId);
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
         // event TokenUnfused(address indexed owner, uint256 underlyingToken1, uint256 underlyingToken2,
@@ -798,32 +798,32 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         // premium token burned
         vm.expectRevert();
-        fraxiversarry.ownerOf(premiumId);
-        assertEq(uint256(fraxiversarry.tokenTypes(premiumId)), uint256(Fraxiversarry.TokenType.NONEXISTENT));
+        fraxiversary.ownerOf(premiumId);
+        assertEq(uint256(fraxiversary.tokenTypes(premiumId)), uint256(Fraxiversary.TokenType.NONEXISTENT));
 
         // underlyingTokenIds cleared
-        (uint256 u1, uint256 u2, uint256 u3, uint256 u4) = fraxiversarry.getUnderlyingTokenIds(premiumId);
+        (uint256 u1, uint256 u2, uint256 u3, uint256 u4) = fraxiversary.getUnderlyingTokenIds(premiumId);
         assertEq(u1, 0);
         assertEq(u2, 0);
         assertEq(u3, 0);
         assertEq(u4, 0);
 
         // Base tokens returned to user
-        assertEq(fraxiversarry.ownerOf(t1), alice);
-        assertEq(fraxiversarry.ownerOf(t2), alice);
-        assertEq(fraxiversarry.ownerOf(t3), alice);
-        assertEq(fraxiversarry.ownerOf(t4), alice);
+        assertEq(fraxiversary.ownerOf(t1), alice);
+        assertEq(fraxiversary.ownerOf(t2), alice);
+        assertEq(fraxiversary.ownerOf(t3), alice);
+        assertEq(fraxiversary.ownerOf(t4), alice);
     }
 
     function testUnfuseTokensRevertsIfNotOwner() public {
         (uint256 t1, uint256 t2, uint256 t3, uint256 t4) = _mintFourDifferentBases(alice);
 
         vm.prank(alice);
-        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3, t4);
+        uint256 premiumId = fraxiversary.fuseTokens(t1, t2, t3, t4);
 
         vm.prank(bob);
         vm.expectRevert(OnlyTokenOwnerCanUnfuseTokens.selector);
-        fraxiversarry.unfuseTokens(premiumId);
+        fraxiversary.unfuseTokens(premiumId);
     }
 
     function testUnfuseTokensRevertsIfNotFused() public {
@@ -831,31 +831,31 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         vm.prank(alice);
         vm.expectRevert(CanOnlyUnfuseFusedTokens.selector);
-        fraxiversarry.unfuseTokens(tokenId);
+        fraxiversary.unfuseTokens(tokenId);
     }
 
     function testUnfuseTokensTwiceReverts() public {
         (uint256 t1, uint256 t2, uint256 t3, uint256 t4) = _mintFourDifferentBases(alice);
 
         vm.prank(alice);
-        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3, t4);
+        uint256 premiumId = fraxiversary.fuseTokens(t1, t2, t3, t4);
 
         vm.prank(alice);
-        fraxiversarry.unfuseTokens(premiumId);
+        fraxiversary.unfuseTokens(premiumId);
 
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(bytes4(keccak256("ERC721NonexistentToken(uint256)")), premiumId));
-        fraxiversarry.unfuseTokens(premiumId);
+        fraxiversary.unfuseTokens(premiumId);
     }
 
     function testBurnRevertsForFusedToken() public {
         (uint256 t1, uint256 t2, uint256 t3, uint256 t4) = _mintFourDifferentBases(alice);
         vm.prank(alice);
-        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3, t4);
+        uint256 premiumId = fraxiversary.fuseTokens(t1, t2, t3, t4);
 
         vm.prank(alice);
         vm.expectRevert(UnfuseTokenBeforeBurning.selector);
-        fraxiversarry.burn(premiumId);
+        fraxiversary.burn(premiumId);
     }
 
     // ----------------------------------------------------------
@@ -864,15 +864,15 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
     function testGetUnderlyingBalancesRevertsForNonexistent() public {
         vm.expectRevert(TokenDoesNotExist.selector);
-        fraxiversarry.getUnderlyingBalances(999999);
+        fraxiversary.getUnderlyingBalances(999999);
     }
 
     function testGetUnderlyingBalancesReturnsEmptyForSoulbound() public {
         vm.startPrank(owner);
-        uint256 sbId = fraxiversarry.soulboundMint(alice, "uri");
+        uint256 sbId = fraxiversary.soulboundMint(alice, "uri");
         vm.stopPrank();
 
-        (address[] memory erc20s, uint256[] memory balances) = fraxiversarry.getUnderlyingBalances(sbId);
+        (address[] memory erc20s, uint256[] memory balances) = fraxiversary.getUnderlyingBalances(sbId);
         assertEq(erc20s.length, 0);
         assertEq(balances.length, 0);
     }
@@ -880,7 +880,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     function testGetUnderlyingBalancesForBaseToken() public {
         uint256 tokenId = _mintBaseWithWfrax(alice);
 
-        (address[] memory erc20s, uint256[] memory balances) = fraxiversarry.getUnderlyingBalances(tokenId);
+        (address[] memory erc20s, uint256[] memory balances) = fraxiversary.getUnderlyingBalances(tokenId);
         assertEq(erc20s.length, 1);
         assertEq(balances.length, 1);
         assertEq(erc20s[0], address(wfrax));
@@ -893,30 +893,30 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
     function testIERC7590BalanceOfERC20() public {
         uint256 tokenId = _mintBaseWithWfrax(alice);
-        assertEq(fraxiversarry.balanceOfERC20(address(wfrax), tokenId), WFRAX_PRICE);
+        assertEq(fraxiversary.balanceOfERC20(address(wfrax), tokenId), WFRAX_PRICE);
     }
 
     function testIERC7590TransferHeldERC20FromTokenAlwaysReverts() public {
         uint256 tokenId = _mintBaseWithWfrax(alice);
         vm.expectRevert(TokensCanOnlyBeRetrievedByNftBurn.selector);
-        fraxiversarry.transferHeldERC20FromToken(address(wfrax), tokenId, alice, WFRAX_PRICE, "");
+        fraxiversary.transferHeldERC20FromToken(address(wfrax), tokenId, alice, WFRAX_PRICE, "");
     }
 
     function testIERC7590TransferERC20ToTokenAlwaysReverts() public {
         uint256 tokenId = _mintBaseWithWfrax(alice);
         vm.expectRevert(TokensCanOnlyBeDepositedByNftMint.selector);
-        fraxiversarry.transferERC20ToToken(address(wfrax), tokenId, WFRAX_PRICE, "");
+        fraxiversary.transferERC20ToToken(address(wfrax), tokenId, WFRAX_PRICE, "");
     }
 
     function testIERC7590TransferOutNonceIncrementsOnBurn() public {
         uint256 tokenId = _mintBaseWithWfrax(alice);
-        assertEq(fraxiversarry.erc20TransferOutNonce(tokenId), 0);
+        assertEq(fraxiversary.erc20TransferOutNonce(tokenId), 0);
 
         vm.prank(alice);
-        fraxiversarry.burn(tokenId);
+        fraxiversary.burn(tokenId);
 
         // There was exactly one ERC20 out transfer
-        assertEq(fraxiversarry.erc20TransferOutNonce(tokenId), 1);
+        assertEq(fraxiversary.erc20TransferOutNonce(tokenId), 1);
     }
 
     // ----------------------------------------------------------
@@ -924,42 +924,42 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     // ----------------------------------------------------------
 
     function testPauseAndUnpause() public {
-        assertFalse(fraxiversarry.paused());
+        assertFalse(fraxiversary.paused());
 
         // Pause as owner
         vm.prank(owner);
-        fraxiversarry.pause();
-        assertTrue(fraxiversarry.paused());
+        fraxiversary.pause();
+        assertTrue(fraxiversary.paused());
 
         // Unpause as owner
         vm.prank(owner);
-        fraxiversarry.unpause();
-        assertFalse(fraxiversarry.paused());
+        fraxiversary.unpause();
+        assertFalse(fraxiversary.paused());
 
         // After unpause, mint works again
         uint256 tokenId = _mintBaseWithWfrax(alice);
-        assertEq(fraxiversarry.ownerOf(tokenId), alice);
+        assertEq(fraxiversary.ownerOf(tokenId), alice);
     }
 
     function testTransferWhilePausedReverts() public {
         uint256 tokenId = _mintBaseWithWfrax(alice);
 
         vm.prank(owner);
-        fraxiversarry.pause();
+        fraxiversary.pause();
 
         vm.prank(alice);
         vm.expectRevert(bytes4(keccak256("EnforcedPause()")));
-        fraxiversarry.transferFrom(alice, bob, tokenId);
+        fraxiversary.transferFrom(alice, bob, tokenId);
     }
 
     function testPauseAndUnpauseOnlyOwner() public {
         vm.prank(alice);
         vm.expectRevert(); // Ownable: caller is not the owner
-        fraxiversarry.pause();
+        fraxiversary.pause();
 
         vm.prank(alice);
         vm.expectRevert(); // Ownable: caller is not the owner
-        fraxiversarry.unpause();
+        fraxiversary.unpause();
     }
 
     // ----------------------------------------------------------
@@ -972,11 +972,11 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         // Change base URI for wFRAX
         vm.prank(owner);
-        fraxiversarry.setBaseAssetTokenUri(address(wfrax), "https://tba.fraxiversarry/wfrax-updated.json");
+        fraxiversary.setBaseAssetTokenUri(address(wfrax), "https://tba.fraxiversary/wfrax-updated.json");
 
         vm.recordLogs();
         vm.prank(owner);
-        fraxiversarry.refreshBaseTokenUris(t1, t2);
+        fraxiversary.refreshBaseTokenUris(t1, t2);
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
         bytes32 expectedSig = keccak256("BatchMetadataUpdate(uint256,uint256)");
@@ -994,8 +994,8 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         assertTrue(found, "BatchMetadataUpdate event not found");
 
         // URIs updated
-        assertEq(fraxiversarry.tokenURI(t1), "https://tba.fraxiversarry/wfrax-updated.json");
-        assertEq(fraxiversarry.tokenURI(t2), "https://tba.fraxiversarry/wfrax-updated.json");
+        assertEq(fraxiversary.tokenURI(t1), "https://tba.fraxiversary/wfrax-updated.json");
+        assertEq(fraxiversary.tokenURI(t2), "https://tba.fraxiversary/wfrax-updated.json");
     }
 
     function testRefreshBaseTokenUrisSkipsTokensWithoutUnderlyingOrBalance() public {
@@ -1003,27 +1003,27 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         uint256 t2 = _mintBaseWithWfrax(alice);
 
         // zero out t2's internal balance for WFRAX using stdStore (safe + layout-correct)
-        uint256 balSlot = _stdStore.target(address(fraxiversarry)).sig("erc20Balances(uint256,address)").with_key(t2)
+        uint256 balSlot = _stdStore.target(address(fraxiversary)).sig("erc20Balances(uint256,address)").with_key(t2)
             .with_key(address(wfrax)).find();
 
-        vm.store(address(fraxiversarry), bytes32(balSlot), bytes32(uint256(0)));
+        vm.store(address(fraxiversary), bytes32(balSlot), bytes32(uint256(0)));
         // Alternatively you can burn t2 to clear state; but we want a token with owner but no underlying/balance
         // For simplicity, leave as demonstration; coverage-wise, function executes branch where condition is false.
 
         vm.prank(owner);
-        fraxiversarry.setBaseAssetTokenUri(address(wfrax), "https://tba.fraxiversarry/wfrax-updated.json");
+        fraxiversary.setBaseAssetTokenUri(address(wfrax), "https://tba.fraxiversary/wfrax-updated.json");
 
         vm.prank(owner);
-        fraxiversarry.refreshBaseTokenUris(t1, t2);
+        fraxiversary.refreshBaseTokenUris(t1, t2);
 
         // t1 updated, t2 either unchanged or same as before; important part is that function ran over branch where condition false
-        assertEq(fraxiversarry.tokenURI(t1), "https://tba.fraxiversarry/wfrax-updated.json");
+        assertEq(fraxiversary.tokenURI(t1), "https://tba.fraxiversary/wfrax-updated.json");
     }
 
     function testRefreshBaseTokenUrisRevertsOnInvalidRange() public {
         vm.prank(owner);
         vm.expectRevert(InvalidRange.selector);
-        fraxiversarry.refreshBaseTokenUris(10, 5);
+        fraxiversary.refreshBaseTokenUris(10, 5);
     }
 
     function testRefreshBaseTokenUrisRevertsOutOfBounds() public {
@@ -1032,20 +1032,20 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         vm.prank(owner);
         vm.expectRevert(OutOfBounds.selector);
-        fraxiversarry.refreshBaseTokenUris(t1, last);
+        fraxiversary.refreshBaseTokenUris(t1, last);
     }
 
     function testRefreshPremiumTokenUrisOnlyUpdatesFusedTokens() public {
         (uint256 t1, uint256 t2, uint256 t3, uint256 t4) = _mintFourDifferentBases(alice);
 
         vm.startPrank(alice);
-        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3, t4);
+        uint256 premiumId = fraxiversary.fuseTokens(t1, t2, t3, t4);
         vm.stopPrank();
 
         // Also mint a soulbound in the premium range
         vm.startPrank(owner);
-        uint256 sbId = fraxiversarry.soulboundMint(bob, "https://premium.tba.fraxiversarry/soulbound.json");
-        fraxiversarry.setPremiumTokenUri("https://premium.tba.fraxiversarry/updated.json");
+        uint256 sbId = fraxiversary.soulboundMint(bob, "https://premium.tba.fraxiversary/soulbound.json");
+        fraxiversary.setPremiumTokenUri("https://premium.tba.fraxiversary/updated.json");
         vm.stopPrank();
 
         uint256 first = premiumId;
@@ -1053,7 +1053,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         vm.recordLogs();
         vm.prank(owner);
-        fraxiversarry.refreshPremiumTokenUris(first, last);
+        fraxiversary.refreshPremiumTokenUris(first, last);
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
         bytes32 expectedSig = keccak256("BatchMetadataUpdate(uint256,uint256)");
@@ -1071,36 +1071,36 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         assertTrue(found, "BatchMetadataUpdate event not found");
 
         // premium (fused) token should get updated URI
-        assertEq(fraxiversarry.tokenURI(premiumId), "https://premium.tba.fraxiversarry/updated.json");
+        assertEq(fraxiversary.tokenURI(premiumId), "https://premium.tba.fraxiversary/updated.json");
 
         // soulbound token has no underlyingTokenIds and must keep its original URI
-        assertEq(fraxiversarry.tokenURI(sbId), "https://premium.tba.fraxiversarry/soulbound.json");
+        assertEq(fraxiversary.tokenURI(sbId), "https://premium.tba.fraxiversary/soulbound.json");
     }
 
     function testRefreshPremiumTokenUrisRevertsIfRangeNotPremiumSpace() public {
         vm.prank(owner);
         vm.expectRevert(OutOfBounds.selector);
-        fraxiversarry.refreshPremiumTokenUris(0, 11999); // below mintingLimit
+        fraxiversary.refreshPremiumTokenUris(0, 11999); // below mintingLimit
     }
 
     function testRefreshPremiumTokenUrisRevertsOnInvalidRange() public {
         vm.prank(owner);
         vm.expectRevert(InvalidRange.selector);
-        fraxiversarry.refreshPremiumTokenUris(13000, 12000);
+        fraxiversary.refreshPremiumTokenUris(13000, 12000);
     }
 
     function testRefreshPremiumTokenUrisRevertsWhenLastOutOfBounds() public {
         (uint256 t1, uint256 t2, uint256 t3, uint256 t4) = _mintFourDifferentBases(alice);
 
         vm.prank(alice);
-        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3, t4);
+        uint256 premiumId = fraxiversary.fuseTokens(t1, t2, t3, t4);
 
         // _nextPremiumTokenId is now premiumId + 1; choose last >= _nextPremiumTokenId
         uint256 last = premiumId + 5;
 
         vm.prank(owner);
         vm.expectRevert(OutOfBounds.selector);
-        fraxiversarry.refreshPremiumTokenUris(premiumId, last);
+        fraxiversary.refreshPremiumTokenUris(premiumId, last);
     }
 
     // ----------------------------------------------------------
@@ -1109,28 +1109,28 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
     function testSupportsInterface() public {
         // IERC7590
-        assertTrue(fraxiversarry.supportsInterface(type(IERC7590).interfaceId));
+        assertTrue(fraxiversary.supportsInterface(type(IERC7590).interfaceId));
 
         // IERC6454
-        assertTrue(fraxiversarry.supportsInterface(type(IERC6454).interfaceId));
+        assertTrue(fraxiversary.supportsInterface(type(IERC6454).interfaceId));
 
         // IERC4906
-        assertTrue(fraxiversarry.supportsInterface(type(IERC4906).interfaceId));
+        assertTrue(fraxiversary.supportsInterface(type(IERC4906).interfaceId));
 
         // ERC165
-        assertTrue(fraxiversarry.supportsInterface(type(IERC165).interfaceId));
+        assertTrue(fraxiversary.supportsInterface(type(IERC165).interfaceId));
 
         // ERC721
-        assertTrue(fraxiversarry.supportsInterface(type(IERC721).interfaceId));
+        assertTrue(fraxiversary.supportsInterface(type(IERC721).interfaceId));
 
         // Random interface should be false
-        assertFalse(fraxiversarry.supportsInterface(bytes4(0xffffffff)));
+        assertFalse(fraxiversary.supportsInterface(bytes4(0xffffffff)));
     }
 
     function testMintPriceUpdatedEvent() public {
         vm.recordLogs();
         vm.prank(owner);
-        fraxiversarry.updateBaseAssetMintPrice(address(wfrax), 150e18);
+        fraxiversary.updateBaseAssetMintPrice(address(wfrax), 150e18);
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
         bytes32 expectedSig = keccak256("MintPriceUpdated(address,uint256,uint256)");
@@ -1160,7 +1160,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     function testNewSoulboundTokenEvent() public {
         vm.recordLogs();
         vm.prank(owner);
-        uint256 sbId = fraxiversarry.soulboundMint(alice, "https://premium.tba.fraxiversarry/sb-event.json");
+        uint256 sbId = fraxiversary.soulboundMint(alice, "https://premium.tba.fraxiversary/sb-event.json");
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
         bytes32 expectedSig = keccak256("NewSoulboundToken(address,uint256)");
@@ -1185,66 +1185,66 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     function testPauseRevertsWhenAlreadyPaused() public {
         // First pause succeeds
         vm.prank(owner);
-        fraxiversarry.pause();
-        assertTrue(fraxiversarry.paused());
+        fraxiversary.pause();
+        assertTrue(fraxiversary.paused());
 
         // Second pause hits OZ's EnforcedPause()
         vm.prank(owner);
         vm.expectRevert(bytes4(keccak256("EnforcedPause()")));
-        fraxiversarry.pause();
+        fraxiversary.pause();
     }
 
     function testUnpauseRevertsWhenNotPaused() public {
-        assertFalse(fraxiversarry.paused());
+        assertFalse(fraxiversary.paused());
 
         vm.prank(owner);
         vm.expectRevert(bytes4(keccak256("ExpectedPause()")));
-        fraxiversarry.unpause();
+        fraxiversary.unpause();
     }
 
     function testRefreshPremiumTokenUrisWhenFirstUnderlyingIdZeroButSecondNonZero() public {
         (uint256 t1, uint256 t2, uint256 t3, uint256 t4) = _mintFourDifferentBases(alice);
 
         vm.prank(alice);
-        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3, t4);
+        uint256 premiumId = fraxiversary.fuseTokens(t1, t2, t3, t4);
 
-        (uint256 u1, uint256 u2, uint256 u3, uint256 u4) = fraxiversarry.getUnderlyingTokenIds(premiumId);
+        (uint256 u1, uint256 u2, uint256 u3, uint256 u4) = fraxiversary.getUnderlyingTokenIds(premiumId);
         assertEq(u1, t1);
         assertEq(u2, t2);
         assertEq(u3, t3);
         assertEq(u4, t4);
 
         // Force index 0 to 0
-        uint256 slot0 = _stdStore.target(address(fraxiversarry)).sig("underlyingTokenIds(uint256,uint256)")
+        uint256 slot0 = _stdStore.target(address(fraxiversary)).sig("underlyingTokenIds(uint256,uint256)")
             .with_key(premiumId).with_key(uint256(0)).find();
 
-        vm.store(address(fraxiversarry), bytes32(slot0), bytes32(uint256(0)));
+        vm.store(address(fraxiversary), bytes32(slot0), bytes32(uint256(0)));
 
-        (u1, u2, u3, u4) = fraxiversarry.getUnderlyingTokenIds(premiumId);
+        (u1, u2, u3, u4) = fraxiversary.getUnderlyingTokenIds(premiumId);
         assertEq(u1, 0);
         assertEq(u2, t2);
         assertEq(u3, t3);
         assertEq(u4, t4);
 
         vm.prank(owner);
-        fraxiversarry.setPremiumTokenUri("https://premium.tba.fraxiversarry/hacked.json");
+        fraxiversary.setPremiumTokenUri("https://premium.tba.fraxiversary/hacked.json");
 
         vm.prank(owner);
-        fraxiversarry.refreshPremiumTokenUris(premiumId, premiumId);
+        fraxiversary.refreshPremiumTokenUris(premiumId, premiumId);
 
-        assertEq(fraxiversarry.tokenURI(premiumId), "https://premium.tba.fraxiversarry/hacked.json");
+        assertEq(fraxiversary.tokenURI(premiumId), "https://premium.tba.fraxiversary/hacked.json");
     }
 
     function testUpdateBaseAssetMintPriceRemovalHitsLoopBreak() public {
         // Start from known setup: 4 supported tokens
-        (address[] memory tokensBefore,) = fraxiversarry.getSupportedErc20s();
+        (address[] memory tokensBefore,) = fraxiversary.getSupportedErc20s();
         assertEq(tokensBefore.length, 4);
 
         // Remove the *middle* token, guaranteeing that we enter the loop and hit `break;`
         vm.prank(owner);
-        fraxiversarry.updateBaseAssetMintPrice(address(sfrxusd), 0);
+        fraxiversary.updateBaseAssetMintPrice(address(sfrxusd), 0);
 
-        (address[] memory tokensAfter,) = fraxiversarry.getSupportedErc20s();
+        (address[] memory tokensAfter,) = fraxiversary.getSupportedErc20s();
         assertEq(tokensAfter.length, 3);
 
         // The remaining tokens should be wfrax, sfrxeth, and fpi (order doesn’t matter)
@@ -1265,32 +1265,32 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
     function testUpdateBaseAssetMintPriceRemovalDefensiveGuard() public {
         // Sanity: wfrax has non-zero price
-        assertEq(fraxiversarry.mintPrices(address(wfrax)), WFRAX_PRICE);
+        assertEq(fraxiversary.mintPrices(address(wfrax)), WFRAX_PRICE);
 
-        uint256 len = fraxiversarry.totalNumberOfSupportedErc20s();
+        uint256 len = fraxiversary.totalNumberOfSupportedErc20s();
         // Corrupt all supportedErc20s entries so none point to wfrax
         for (uint256 i; i < len; ++i) {
-            uint256 slot = _stdStore.target(address(fraxiversarry)).sig("supportedErc20s(uint256)").with_key(i).find();
+            uint256 slot = _stdStore.target(address(fraxiversary)).sig("supportedErc20s(uint256)").with_key(i).find();
 
-            vm.store(address(fraxiversarry), bytes32(slot), bytes32(uint256(uint160(address(0xDEAD)))));
+            vm.store(address(fraxiversary), bytes32(slot), bytes32(uint256(uint160(address(0xDEAD)))));
         }
 
         // Now removing wfrax (setting price to 0) should hit UnsupportedToken guard
         vm.prank(owner);
         vm.expectRevert(UnsupportedToken.selector);
-        fraxiversarry.updateBaseAssetMintPrice(address(wfrax), 0);
+        fraxiversary.updateBaseAssetMintPrice(address(wfrax), 0);
     }
 
     function testUpdateGiftMintingPriceHappyPath() public {
-        uint256 oldPrice = fraxiversarry.giftMintingPrice();
+        uint256 oldPrice = fraxiversary.giftMintingPrice();
         uint256 newPrice = oldPrice + 1e18;
 
         vm.recordLogs();
         vm.prank(owner);
-        fraxiversarry.updateGiftMintingPrice(newPrice);
+        fraxiversary.updateGiftMintingPrice(newPrice);
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
-        assertEq(fraxiversarry.giftMintingPrice(), newPrice);
+        assertEq(fraxiversary.giftMintingPrice(), newPrice);
 
         bytes32 expectedSig = keccak256("GiftMintPriceUpdated(uint256,uint256)");
         bool found;
@@ -1308,51 +1308,51 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     function testUpdateGiftMintingPriceRevertsOnTooLowPrice() public {
         vm.prank(owner);
         vm.expectRevert(InvalidGiftMintPrice.selector);
-        fraxiversarry.updateGiftMintingPrice(1e18); // boundary: <= 1e18
+        fraxiversary.updateGiftMintingPrice(1e18); // boundary: <= 1e18
     }
 
     function testUpdateGiftMintingPriceRevertsOnSamePrice() public {
-        uint256 current = fraxiversarry.giftMintingPrice();
+        uint256 current = fraxiversary.giftMintingPrice();
         vm.prank(owner);
         vm.expectRevert(AttemptingToSetExistingMintPrice.selector);
-        fraxiversarry.updateGiftMintingPrice(current);
+        fraxiversary.updateGiftMintingPrice(current);
     }
 
     function testUpdateGiftMintingPriceOnlyOwner() public {
         vm.prank(alice);
         vm.expectRevert(); // Ownable
-        fraxiversarry.updateGiftMintingPrice(100e18);
+        fraxiversary.updateGiftMintingPrice(100e18);
     }
 
     function testSetGiftTokenUriAndRefreshGiftTokens() public {
-        uint256 giftPrice = fraxiversarry.giftMintingPrice();
+        uint256 giftPrice = fraxiversary.giftMintingPrice();
 
         vm.startPrank(alice);
-        wfrax.approve(address(fraxiversarry), _total(giftPrice));
-        uint256 giftId = fraxiversarry.giftMint(alice);
+        wfrax.approve(address(fraxiversary), _total(giftPrice));
+        uint256 giftId = fraxiversary.giftMint(alice);
         vm.stopPrank();
 
         // Owner changes gift URI
         vm.prank(owner);
-        fraxiversarry.setGiftTokenUri("https://gift.tba.fraxiversarry/new.json");
+        fraxiversary.setGiftTokenUri("https://gift.tba.fraxiversary/new.json");
 
         // Refresh and assert
         vm.prank(owner);
-        fraxiversarry.refreshGiftTokenUris(giftId, giftId);
+        fraxiversary.refreshGiftTokenUris(giftId, giftId);
 
-        assertEq(fraxiversarry.tokenURI(giftId), "https://gift.tba.fraxiversarry/new.json");
+        assertEq(fraxiversary.tokenURI(giftId), "https://gift.tba.fraxiversary/new.json");
     }
 
     function testSetGiftTokenUriOnlyOwner() public {
         vm.prank(alice);
         vm.expectRevert(); // Ownable
-        fraxiversarry.setGiftTokenUri("uri");
+        fraxiversary.setGiftTokenUri("uri");
     }
 
     function testSetPremiumTokenUriOnlyOwner() public {
         vm.prank(alice);
         vm.expectRevert(); // Ownable
-        fraxiversarry.setPremiumTokenUri("uri");
+        fraxiversary.setPremiumTokenUri("uri");
     }
 
     function testUpdateSpecificTokenUriEmitsMetadataUpdate() public {
@@ -1360,11 +1360,11 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         vm.recordLogs();
         vm.prank(owner);
-        fraxiversarry.updateSpecificTokenUri(tokenId, "https://custom/meta-event.json");
+        fraxiversary.updateSpecificTokenUri(tokenId, "https://custom/meta-event.json");
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
         // Check URI
-        assertEq(fraxiversarry.tokenURI(tokenId), "https://custom/meta-event.json");
+        assertEq(fraxiversary.tokenURI(tokenId), "https://custom/meta-event.json");
 
         // Check MetadataUpdate event
         bytes32 expectedSig = keccak256("MetadataUpdate(uint256)");
@@ -1387,9 +1387,9 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         uint256 tokenId = _mintBaseWithWfrax(alice);
 
         vm.prank(owner);
-        fraxiversarry.updateSpecificTokenUri(tokenId, "https://custom/special.json");
+        fraxiversary.updateSpecificTokenUri(tokenId, "https://custom/special.json");
 
-        assertEq(fraxiversarry.tokenURI(tokenId), "https://custom/special.json");
+        assertEq(fraxiversary.tokenURI(tokenId), "https://custom/special.json");
     }
 
     function testUpdateSpecificTokenUriRevertsForNonexistentToken() public {
@@ -1397,75 +1397,75 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         // Burn it so tokenTypes[tokenId] becomes NONEXISTENT
         vm.prank(alice);
-        fraxiversarry.burn(tokenId);
+        fraxiversary.burn(tokenId);
 
         vm.prank(owner);
         vm.expectRevert(TokenDoesNotExist.selector);
-        fraxiversarry.updateSpecificTokenUri(tokenId, "https://custom/special.json");
+        fraxiversary.updateSpecificTokenUri(tokenId, "https://custom/special.json");
     }
 
     function testRefreshGiftTokenUrisRevertsOnInvalidRange() public {
         vm.prank(owner);
         vm.expectRevert(InvalidRange.selector);
-        fraxiversarry.refreshGiftTokenUris(13000, 12000);
+        fraxiversary.refreshGiftTokenUris(13000, 12000);
     }
 
     function testRefreshGiftTokenUrisRevertsIfFirstBelowMintingLimit() public {
         vm.prank(owner);
         vm.expectRevert(OutOfBounds.selector);
-        fraxiversarry.refreshGiftTokenUris(0, 10);
+        fraxiversary.refreshGiftTokenUris(0, 10);
     }
 
     function testRefreshGiftTokenUrisRevertsIfLastOutOfBounds() public {
         // Mint exactly one gift to advance nextGiftTokenId
-        uint256 giftPrice = fraxiversarry.giftMintingPrice();
+        uint256 giftPrice = fraxiversary.giftMintingPrice();
         vm.startPrank(alice);
-        wfrax.approve(address(fraxiversarry), (_total(giftPrice)));
-        uint256 giftId = fraxiversarry.giftMint(alice);
+        wfrax.approve(address(fraxiversary), (_total(giftPrice)));
+        uint256 giftId = fraxiversary.giftMint(alice);
         vm.stopPrank();
 
-        uint256 last = fraxiversarry.nextGiftTokenId(); // >= nextGiftTokenId
+        uint256 last = fraxiversary.nextGiftTokenId(); // >= nextGiftTokenId
 
         vm.prank(owner);
         vm.expectRevert(OutOfBounds.selector);
-        fraxiversarry.refreshGiftTokenUris(giftId, last);
+        fraxiversary.refreshGiftTokenUris(giftId, last);
     }
 
     function testIsTransferableForAllTokenTypesAndBurned() public {
         // BASE
         uint256 baseId = _mintBaseWithWfrax(alice);
-        assertTrue(fraxiversarry.isTransferable(baseId, alice, bob));
+        assertTrue(fraxiversary.isTransferable(baseId, alice, bob));
 
         // GIFT
-        uint256 giftPrice = fraxiversarry.giftMintingPrice();
+        uint256 giftPrice = fraxiversary.giftMintingPrice();
         vm.startPrank(alice);
-        wfrax.approve(address(fraxiversarry), (_total(giftPrice)));
-        uint256 giftId = fraxiversarry.giftMint(alice);
+        wfrax.approve(address(fraxiversary), (_total(giftPrice)));
+        uint256 giftId = fraxiversary.giftMint(alice);
         vm.stopPrank();
-        assertTrue(fraxiversarry.isTransferable(giftId, alice, bob));
+        assertTrue(fraxiversary.isTransferable(giftId, alice, bob));
 
         // SOULBOUND
         vm.startPrank(owner);
-        uint256 sbId = fraxiversarry.soulboundMint(alice, "uri");
+        uint256 sbId = fraxiversary.soulboundMint(alice, "uri");
         vm.stopPrank();
-        assertFalse(fraxiversarry.isTransferable(sbId, alice, bob));
+        assertFalse(fraxiversary.isTransferable(sbId, alice, bob));
 
         // FUSED
         (uint256 t1, uint256 t2, uint256 t3, uint256 t4) = _mintFourDifferentBases(alice);
         vm.prank(alice);
-        uint256 premiumId = fraxiversarry.fuseTokens(t1, t2, t3, t4);
-        assertTrue(fraxiversarry.isTransferable(premiumId, alice, bob));
+        uint256 premiumId = fraxiversary.fuseTokens(t1, t2, t3, t4);
+        assertTrue(fraxiversary.isTransferable(premiumId, alice, bob));
 
         // Burned BASE token: mapping flag is false, so still returns true
         vm.prank(alice);
-        fraxiversarry.burn(baseId);
-        assertTrue(fraxiversarry.isTransferable(baseId, alice, bob));
+        fraxiversary.burn(baseId);
+        assertTrue(fraxiversary.isTransferable(baseId, alice, bob));
     }
 
     function testIERC7590BalanceOfERC20ZeroForUnheldAsset() public {
         uint256 tokenId = _mintBaseWithWfrax(alice);
         // tokenId holds wfrax, not sfrxusd
-        assertEq(fraxiversarry.balanceOfERC20(address(sfrxusd), tokenId), 0);
+        assertEq(fraxiversary.balanceOfERC20(address(sfrxusd), tokenId), 0);
     }
 
     function testIERC7590TransferOutNonceWithMultipleAssets() public {
@@ -1474,24 +1474,24 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         // Add a second underlying asset (sfrxusd) to this tokenId
 
         // 1) Mint sfrxusd to the contract so transfers won't fail
-        sfrxusd.mint(address(fraxiversarry), 123);
+        sfrxusd.mint(address(fraxiversary), 123);
 
         // 2) Set erc20Balances[tokenId][sfrxusd] = 123
-        uint256 balanceSlot = _stdStore.target(address(fraxiversarry)).sig("erc20Balances(uint256,address)")
+        uint256 balanceSlot = _stdStore.target(address(fraxiversary)).sig("erc20Balances(uint256,address)")
             .with_key(tokenId).with_key(address(sfrxusd)).find();
 
-        vm.store(address(fraxiversarry), bytes32(balanceSlot), bytes32(uint256(123)));
+        vm.store(address(fraxiversary), bytes32(balanceSlot), bytes32(uint256(123)));
 
         // 3) ACTUALLY extend the underlyingAssets array length to 2
-        fraxiversarry._pushUnderlyingAsset(tokenId, address(sfrxusd));
+        fraxiversary._pushUnderlyingAsset(tokenId, address(sfrxusd));
 
-        assertEq(fraxiversarry.erc20TransferOutNonce(tokenId), 0);
+        assertEq(fraxiversary.erc20TransferOutNonce(tokenId), 0);
 
         vm.prank(alice);
-        fraxiversarry.burn(tokenId);
+        fraxiversary.burn(tokenId);
 
         // Two assets => two internal transfers => nonce == 2
-        assertEq(fraxiversarry.erc20TransferOutNonce(tokenId), 2);
+        assertEq(fraxiversary.erc20TransferOutNonce(tokenId), 2);
     }
 
     function testFuseTokensWithRepeatedTokenIdReverts() public {
@@ -1499,17 +1499,17 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         vm.prank(alice);
         vm.expectRevert(SameTokenUnderlyingAssets.selector);
-        fraxiversarry.fuseTokens(t1, t1, t2, t3);
+        fraxiversary.fuseTokens(t1, t1, t2, t3);
     }
 
     function testTokenURIRevertsForBurnedToken() public {
         uint256 tokenId = _mintBaseWithWfrax(alice);
 
         vm.prank(alice);
-        fraxiversarry.burn(tokenId);
+        fraxiversary.burn(tokenId);
 
         vm.expectRevert(); // ERC721: invalid token ID
-        fraxiversarry.tokenURI(tokenId);
+        fraxiversary.tokenURI(tokenId);
     }
 
     // ----------------------------------------------------------
@@ -1521,7 +1521,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         MockLzEndpoint localEndpoint = new MockLzEndpoint();
 
         uint256 deployBlock = block.number;
-        Fraxiversarry local = new Fraxiversarry(owner, address(localEndpoint));
+        Fraxiversary local = new Fraxiversary(owner, address(localEndpoint));
 
         uint256 expectedDelta = (35 days / 2 seconds);
         assertEq(local.mintingCutoffBlock(), deployBlock + expectedDelta);
@@ -1530,21 +1530,21 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     function testPaidMintAllowedAtCutoffBlock() public {
         // Set cutoff to current block so mint is still allowed
         vm.prank(owner);
-        fraxiversarry.updateMintingCutoffBlock(block.number);
+        fraxiversary.updateMintingCutoffBlock(block.number);
 
         _approveWithFee(alice, wfrax);
 
         vm.prank(alice);
-        uint256 tokenId = fraxiversarry.paidMint(address(wfrax));
+        uint256 tokenId = fraxiversary.paidMint(address(wfrax));
 
-        assertEq(fraxiversarry.ownerOf(tokenId), alice);
-        assertEq(uint256(fraxiversarry.tokenTypes(tokenId)), uint256(Fraxiversarry.TokenType.BASE));
+        assertEq(fraxiversary.ownerOf(tokenId), alice);
+        assertEq(uint256(fraxiversary.tokenTypes(tokenId)), uint256(Fraxiversary.TokenType.BASE));
     }
 
     function testPaidMintRevertsAfterCutoffBlock() public {
         uint256 cutoff = block.number;
         vm.prank(owner);
-        fraxiversarry.updateMintingCutoffBlock(cutoff);
+        fraxiversary.updateMintingCutoffBlock(cutoff);
 
         // Move to cutoff + 1
         vm.roll(cutoff + 1);
@@ -1553,53 +1553,53 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
         vm.prank(alice);
         vm.expectRevert(MintingPeriodOver.selector);
-        fraxiversarry.paidMint(address(wfrax));
+        fraxiversary.paidMint(address(wfrax));
     }
 
     function testGiftMintAllowedAtCutoffBlock() public {
         vm.prank(owner);
-        fraxiversarry.updateMintingCutoffBlock(block.number);
+        fraxiversary.updateMintingCutoffBlock(block.number);
 
-        (,, uint256 giftMintingPrice) = fraxiversarry.getGiftMintingPriceWithFee();
+        (,, uint256 giftMintingPrice) = fraxiversary.getGiftMintingPriceWithFee();
         vm.prank(alice);
-        wfrax.approve(address(fraxiversarry), giftMintingPrice);
+        wfrax.approve(address(fraxiversary), giftMintingPrice);
 
         vm.prank(alice);
-        uint256 tokenId = fraxiversarry.giftMint(bob);
+        uint256 tokenId = fraxiversary.giftMint(bob);
 
-        assertEq(fraxiversarry.ownerOf(tokenId), bob);
-        assertEq(uint256(fraxiversarry.tokenTypes(tokenId)), uint256(Fraxiversarry.TokenType.GIFT));
+        assertEq(fraxiversary.ownerOf(tokenId), bob);
+        assertEq(uint256(fraxiversary.tokenTypes(tokenId)), uint256(Fraxiversary.TokenType.GIFT));
     }
 
     function testGiftMintRevertsAfterCutoffBlock() public {
         uint256 cutoff = block.number;
         vm.prank(owner);
-        fraxiversarry.updateMintingCutoffBlock(cutoff);
+        fraxiversary.updateMintingCutoffBlock(cutoff);
 
         vm.roll(cutoff + 1);
 
-        (,, uint256 giftMintingPrice) = fraxiversarry.getGiftMintingPriceWithFee();
+        (,, uint256 giftMintingPrice) = fraxiversary.getGiftMintingPriceWithFee();
         vm.prank(alice);
-        wfrax.approve(address(fraxiversarry), giftMintingPrice);
+        wfrax.approve(address(fraxiversary), giftMintingPrice);
 
         vm.prank(alice);
         vm.expectRevert(MintingPeriodOver.selector);
-        fraxiversarry.giftMint(bob);
+        fraxiversary.giftMint(bob);
     }
 
     function testUpdateMintingCutoffBlockOnlyOwner() public {
         vm.prank(alice);
         vm.expectRevert(); // Ownable: caller is not the owner
-        fraxiversarry.updateMintingCutoffBlock(block.number + 100);
+        fraxiversary.updateMintingCutoffBlock(block.number + 100);
     }
 
     function testUpdateMintingCutoffBlockEmitsEvent() public {
-        uint256 previous = fraxiversarry.mintingCutoffBlock();
+        uint256 previous = fraxiversary.mintingCutoffBlock();
         uint256 next = previous + 123;
 
         vm.recordLogs();
         vm.prank(owner);
-        fraxiversarry.updateMintingCutoffBlock(next);
+        fraxiversary.updateMintingCutoffBlock(next);
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
         bytes32 expectedSig = keccak256("MintingCutoffBlockUpdated(uint256,uint256)");
@@ -1615,7 +1615,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         }
 
         assertTrue(found, "MintingCutoffBlockUpdated event not found");
-        assertEq(fraxiversarry.mintingCutoffBlock(), next);
+        assertEq(fraxiversary.mintingCutoffBlock(), next);
     }
 
     // ----------------------------------------------------------
@@ -1623,11 +1623,11 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     // ----------------------------------------------------------
 
     function testONFTTokenReturnsContractAddress() public {
-        assertEq(fraxiversarry.token(), address(fraxiversarry));
+        assertEq(fraxiversary.token(), address(fraxiversary));
     }
 
     function testONFTApprovalRequiredIsFalse() public {
-        assertFalse(fraxiversarry.approvalRequired());
+        assertFalse(fraxiversary.approvalRequired());
     }
 
     // ----------------------------------------------------------
@@ -1638,10 +1638,10 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         uint256 fee = _fee(WFRAX_PRICE);
 
         vm.startPrank(alice);
-        wfrax.approve(address(fraxiversarry), _total(WFRAX_PRICE));
+        wfrax.approve(address(fraxiversary), _total(WFRAX_PRICE));
 
         vm.recordLogs();
-        uint256 tokenId = fraxiversarry.paidMint(address(wfrax));
+        uint256 tokenId = fraxiversary.paidMint(address(wfrax));
         Vm.Log[] memory logs = vm.getRecordedLogs();
         vm.stopPrank();
 
@@ -1661,18 +1661,18 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         }
 
         assertTrue(found, "FeeCollected not found");
-        assertEq(fraxiversarry.erc20Balances(tokenId, address(wfrax)), WFRAX_PRICE);
+        assertEq(fraxiversary.erc20Balances(tokenId, address(wfrax)), WFRAX_PRICE);
     }
 
     function testGiftMintEmitsFeeCollected() public {
-        uint256 giftPrice = fraxiversarry.giftMintingPrice();
+        uint256 giftPrice = fraxiversary.giftMintingPrice();
         uint256 fee = _fee(giftPrice);
 
         vm.startPrank(alice);
-        wfrax.approve(address(fraxiversarry), giftPrice + fee);
+        wfrax.approve(address(fraxiversary), giftPrice + fee);
 
         vm.recordLogs();
-        fraxiversarry.giftMint(bob);
+        fraxiversary.giftMint(bob);
         Vm.Log[] memory logs = vm.getRecordedLogs();
         vm.stopPrank();
 
@@ -1694,7 +1694,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     }
 
     function testGetMintingPriceWithFee() public {
-        (uint256 price, uint256 fee, uint256 total) = fraxiversarry.getMintingPriceWithFee(address(wfrax));
+        (uint256 price, uint256 fee, uint256 total) = fraxiversary.getMintingPriceWithFee(address(wfrax));
 
         assertEq(price, WFRAX_PRICE);
         assertEq(fee, (WFRAX_PRICE * 25) / 1e4);
@@ -1702,8 +1702,8 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     }
 
     function testGetGiftMintingPriceWithFee() public {
-        uint256 giftPrice = fraxiversarry.giftMintingPrice();
-        (uint256 price, uint256 fee, uint256 total) = fraxiversarry.getGiftMintingPriceWithFee();
+        uint256 giftPrice = fraxiversary.giftMintingPrice();
+        (uint256 price, uint256 fee, uint256 total) = fraxiversary.getGiftMintingPriceWithFee();
 
         assertEq(price, giftPrice);
         assertEq(fee, (giftPrice * 25) / 1e4);
@@ -1711,12 +1711,12 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
     }
 
     function testUpdateMintingFeeBasisPointsEmitsEvent() public {
-        uint256 oldFee = fraxiversarry.mintingFeeBasisPoints();
+        uint256 oldFee = fraxiversary.mintingFeeBasisPoints();
         uint256 newFee = oldFee + 10;
 
         vm.recordLogs();
         vm.prank(owner);
-        fraxiversarry.updateMintingFeeBasisPoints(newFee);
+        fraxiversary.updateMintingFeeBasisPoints(newFee);
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
         bytes32 sig = keccak256("MintingFeeUpdated(uint256,uint256)");
@@ -1732,41 +1732,41 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         }
 
         assertTrue(found, "MintingFeeUpdated not found");
-        assertEq(fraxiversarry.mintingFeeBasisPoints(), newFee);
+        assertEq(fraxiversary.mintingFeeBasisPoints(), newFee);
     }
 
     function testRetrieveCollectedFeesTransfersAndZeros() public {
         // generate some fees
         _approveWithFee(alice, wfrax);
         vm.prank(alice);
-        fraxiversarry.paidMint(address(wfrax));
+        fraxiversary.paidMint(address(wfrax));
 
         uint256 fee = _fee(WFRAX_PRICE);
-        assertEq(fraxiversarry.collectedFees(address(wfrax)), fee);
+        assertEq(fraxiversary.collectedFees(address(wfrax)), fee);
 
         uint256 ownerBefore = wfrax.balanceOf(owner);
 
         vm.prank(owner);
-        fraxiversarry.retrieveCollectedFees(address(wfrax), owner);
+        fraxiversary.retrieveCollectedFees(address(wfrax), owner);
 
-        assertEq(fraxiversarry.collectedFees(address(wfrax)), 0);
+        assertEq(fraxiversary.collectedFees(address(wfrax)), 0);
         assertEq(wfrax.balanceOf(owner), ownerBefore + fee);
     }
 
     function testRetrieveCollectedFeesNoopWhenZero() public {
-        assertEq(fraxiversarry.collectedFees(address(wfrax)), 0);
+        assertEq(fraxiversary.collectedFees(address(wfrax)), 0);
 
         vm.prank(owner);
-        fraxiversarry.retrieveCollectedFees(address(wfrax), owner);
+        fraxiversary.retrieveCollectedFees(address(wfrax), owner);
 
-        assertEq(fraxiversarry.collectedFees(address(wfrax)), 0);
+        assertEq(fraxiversary.collectedFees(address(wfrax)), 0);
     }
 
     function testPaidMintRevertsWhenAllowanceCoversPriceButNotFee() public {
         vm.startPrank(alice);
-        wfrax.approve(address(fraxiversarry), WFRAX_PRICE); // missing fee
+        wfrax.approve(address(fraxiversary), WFRAX_PRICE); // missing fee
         vm.expectRevert(InsufficientAllowance.selector);
-        fraxiversarry.paidMint(address(wfrax));
+        fraxiversary.paidMint(address(wfrax));
         vm.stopPrank();
     }
 
@@ -1785,7 +1785,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         SOULBOUND
     }
 
-    function _buildLzMessageForScenario(Fraxiversarry src, TokenScenario scenario, uint256 tokenId, address to)
+    function _buildLzMessageForScenario(Fraxiversary src, TokenScenario scenario, uint256 tokenId, address to)
         internal
         view
         returns (bytes memory msgData)
@@ -1806,18 +1806,18 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
         if (scenario == TokenScenario.BASE) {
             tokenId = _mintBaseWithWfrax(alice);
         } else if (scenario == TokenScenario.GIFT) {
-            uint256 giftPrice = fraxiversarry.giftMintingPrice();
+            uint256 giftPrice = fraxiversary.giftMintingPrice();
             vm.startPrank(alice);
-            wfrax.approve(address(fraxiversarry), _total(giftPrice));
-            tokenId = fraxiversarry.giftMint(alice);
+            wfrax.approve(address(fraxiversary), _total(giftPrice));
+            tokenId = fraxiversary.giftMint(alice);
             vm.stopPrank();
         } else if (scenario == TokenScenario.SOULBOUND) {
             vm.prank(owner);
-            tokenId = fraxiversarry.soulboundMint(alice, "https://premium.tba.fraxiversarry/soul-test.json");
+            tokenId = fraxiversary.soulboundMint(alice, "https://premium.tba.fraxiversary/soul-test.json");
         } else if (scenario == TokenScenario.FUSED) {
             (uint256 t1, uint256 t2, uint256 t3, uint256 t4) = _mintFourDifferentBases(alice);
             vm.prank(alice);
-            tokenId = fraxiversarry.fuseTokens(t1, t2, t3, t4);
+            tokenId = fraxiversary.fuseTokens(t1, t2, t3, t4);
         } else {
             revert("unknown scenario");
         }
@@ -1825,7 +1825,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
     function testMeasureLzReceiveGasStatsAllTokenKinds() public {
         MockLzEndpoint dstEndpoint = new MockLzEndpoint();
-        FraxiversarryInternalHarness dst = new FraxiversarryInternalHarness(owner, address(dstEndpoint));
+        FraxiversaryInternalHarness dst = new FraxiversaryInternalHarness(owner, address(dstEndpoint));
 
         uint32 srcEid = 1;
         uint64 nonce = 1;
@@ -1845,10 +1845,10 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
             for (uint256 s; s < samplesPerScenario; ++s) {
                 uint256 tokenId = _setupScenario(scenario);
 
-                bytes memory message = _buildLzMessageForScenario(fraxiversarry, scenario, tokenId, alice);
+                bytes memory message = _buildLzMessageForScenario(fraxiversary, scenario, tokenId, alice);
 
                 Origin memory origin =
-                    Origin({srcEid: srcEid, sender: bytes32(uint256(uint160(address(fraxiversarry)))), nonce: nonce++});
+                    Origin({srcEid: srcEid, sender: bytes32(uint256(uint160(address(fraxiversary)))), nonce: nonce++});
 
                 vm.recordLogs();
                 dst.measureLzReceive(origin, bytes32(0), message, address(0), "");
@@ -1875,7 +1875,7 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 
                 assertEq(dst.ownerOf(tokenId), alice, "wrong owner on dst");
 
-                assertEq(dst.tokenURI(tokenId), fraxiversarry.tokenURI(tokenId), "tokenURI mismatch after bridge");
+                assertEq(dst.tokenURI(tokenId), fraxiversary.tokenURI(tokenId), "tokenURI mismatch after bridge");
 
                 bool expectedSoulbound = (scenario == TokenScenario.SOULBOUND);
                 bool transferable = dst.isTransferable(tokenId, alice, bob);
@@ -1911,10 +1911,10 @@ contract FraxiversarryTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
 // ----------------------------------------------------------
 error ERC721EnumerableForbiddenBatchMint();
 
-contract FraxiversarryInternalHarness is Fraxiversarry {
+contract FraxiversaryInternalHarness is Fraxiversary {
     event GasMeasured(string tag, uint256 gasUsed);
 
-    constructor(address initialOwner, address lzEndpoint) Fraxiversarry(initialOwner, lzEndpoint) {}
+    constructor(address initialOwner, address lzEndpoint) Fraxiversary(initialOwner, lzEndpoint) {}
 
     // Existing helpers
     function exposedIncreaseBalance(address account, uint128 value) external {
@@ -1980,10 +1980,10 @@ contract FraxiversarryInternalHarness is Fraxiversarry {
     }
 }
 
-contract FraxiversarryInternalHarnessTest is Test {
+contract FraxiversaryInternalHarnessTest is Test {
     function testIncreaseBalanceOverrideIsUsed() public {
         MockLzEndpoint lzEndpoint = new MockLzEndpoint();
-        FraxiversarryInternalHarness h = new FraxiversarryInternalHarness(address(this), address(lzEndpoint));
+        FraxiversaryInternalHarness h = new FraxiversaryInternalHarness(address(this), address(lzEndpoint));
 
         address user = address(0xBEEF);
 
@@ -1995,7 +1995,7 @@ contract FraxiversarryInternalHarnessTest is Test {
 
     function testBaseURIInternalFunction() public {
         MockLzEndpoint lzEndpoint = new MockLzEndpoint();
-        FraxiversarryInternalHarness h = new FraxiversarryInternalHarness(address(this), address(lzEndpoint));
+        FraxiversaryInternalHarness h = new FraxiversaryInternalHarness(address(this), address(lzEndpoint));
         assertEq(h.exposedBaseURI(), "");
     }
 }

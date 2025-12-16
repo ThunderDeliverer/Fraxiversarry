@@ -3,9 +3,9 @@ pragma solidity ^0.8.30;
 
 import "forge-std/Test.sol";
 
-import {Fraxiversarry} from "../src/FraxiversarryEthereum.sol";
-import {IFraxiversarryErrors} from "../src/interfaces/IFraxiversarryErrors.sol";
-import {IFraxiversarryEvents} from "../src/interfaces/IFraxiversarryEvents.sol";
+import {Fraxiversary} from "../src/FraxiversaryEthereum.sol";
+import {IFraxiversaryErrors} from "../src/interfaces/IFraxiversaryErrors.sol";
+import {IFraxiversaryEvents} from "../src/interfaces/IFraxiversaryEvents.sol";
 
 import {MockLzEndpoint} from "./mocks/MockLzEndpoint.sol";
 
@@ -18,12 +18,12 @@ import {IERC6454} from "../src/interfaces/IERC6454.sol";
 import {IERC4906} from "openzeppelin-contracts/contracts/interfaces/IERC4906.sol";
 import {ERC721} from "openzeppelin-contracts/contracts/token/ERC721/ERC721.sol";
 
-contract FraxiversarryEthereumTest is Test, IFraxiversarryErrors, IFraxiversarryEvents {
+contract FraxiversaryEthereumTest is Test, IFraxiversaryErrors, IFraxiversaryEvents {
     using ONFT721MsgCodec for bytes;
     using ONFT721MsgCodec for bytes32;
 
     MockLzEndpoint endpoint;
-    FraxiversarryEthHarness nft;
+    FraxiversaryEthHarness nft;
 
     address owner = address(0xA11CE);
     address alice = address(0xB0B);
@@ -31,7 +31,7 @@ contract FraxiversarryEthereumTest is Test, IFraxiversarryErrors, IFraxiversarry
 
     function setUp() public {
         endpoint = new MockLzEndpoint();
-        nft = new FraxiversarryEthHarness(owner, address(endpoint));
+        nft = new FraxiversaryEthHarness(owner, address(endpoint));
     }
 
     // ------------------------------------------------------------
@@ -415,7 +415,7 @@ contract FraxiversarryEthereumTest is Test, IFraxiversarryErrors, IFraxiversarry
     }
 
     function testNameSymbol() public {
-        assertEq(nft.name(), "Fraxiversarry");
+        assertEq(nft.name(), "Fraxiversary");
         assertEq(nft.symbol(), "FRAX5Y");
     }
 
@@ -536,11 +536,11 @@ contract FraxiversarryEthereumTest is Test, IFraxiversarryErrors, IFraxiversarry
     }
 }
 
-contract FraxiversarryEthHarness is Fraxiversarry {
+contract FraxiversaryEthHarness is Fraxiversary {
     using ONFT721MsgCodec for bytes;
     using ONFT721MsgCodec for bytes32;
 
-    constructor(address _initialOwner, address _lzEndpoint) Fraxiversarry(_initialOwner, _lzEndpoint) {}
+    constructor(address _initialOwner, address _lzEndpoint) Fraxiversary(_initialOwner, _lzEndpoint) {}
 
     // -------------------------
     // Test-only helpers

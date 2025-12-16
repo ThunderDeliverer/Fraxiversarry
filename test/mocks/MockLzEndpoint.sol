@@ -22,7 +22,7 @@ contract MockLzEndpoint {
         return delegateAddress;
     }
 
-    // Used by Fraxiversarry._lzReceive -> endpoint.sendCompose(...)
+    // Used by Fraxiversary._lzReceive -> endpoint.sendCompose(...)
     function sendCompose(address to, bytes32 guid, uint16 index, bytes calldata message) external {
         emit ComposeSent(to, guid, index, message);
     }

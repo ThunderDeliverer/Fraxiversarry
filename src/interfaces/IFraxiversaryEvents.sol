@@ -10,18 +10,18 @@ pragma solidity ^0.8.30;
  * | /_/   /_/   \__,_/_/|_|  /_/   /_/_/ /_/\__,_/_/ /_/\___/\___/   |
  * |                                                                  |
  * ====================================================================
- * ===================== IFraxiversarryEvents =========================
+ * ===================== IFraxiversaryEvents =========================
  * ====================================================================
- * Events of the Fraxiversarry NFT contract for the 5th anniversary of Frax Finance
+ * Events of the Fraxiversary NFT contract for the 5th anniversary of Frax Finance
  * Frax Finance: https://github.com/FraxFinance
  */
 
 /**
- * @title IFraxiversarryEvents
+ * @title IFraxiversaryEvents
  * @author Frax Finance
- * @notice A collection of events used by the Fraxiversarry NFT collection.
+ * @notice A collection of events used by the Fraxiversary NFT collection.
  */
-contract IFraxiversarryEvents {
+contract IFraxiversaryEvents {
     /**
      * @notice Emitted when a minting fee is collected for a given ERC20
      * @dev This is emitted during BASE and GIFT mint flows when a fee is added on top of the net amount
