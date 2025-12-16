@@ -10,9 +10,9 @@ pragma solidity ^0.8.30;
  * | /_/   /_/   \__,_/_/|_|  /_/   /_/_/ /_/\__,_/_/ /_/\___/\___/   |
  * |                                                                  |
  * ====================================================================
- * ========================= Fraxiversarry ============================
+ * ========================= Fraxiversary ============================
  * ====================================================================
- * Fraxiversarry NFT contract for the 5th anniversary of Frax Finance
+ * Fraxiversary NFT contract for the 5th anniversary of Frax Finance
  * Frax Finance: https://github.com/FraxFinance
  */
 
@@ -24,8 +24,8 @@ import {ERC721Enumerable} from "openzeppelin-contracts/contracts/token/ERC721/ex
 import {ERC721Pausable} from "openzeppelin-contracts/contracts/token/ERC721/extensions/ERC721Pausable.sol";
 import {ERC721URIStorage} from "openzeppelin-contracts/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 
-import {IFraxiversarryErrors} from "./interfaces/IFraxiversarryErrors.sol";
-import {IFraxiversarryEvents} from "./interfaces/IFraxiversarryEvents.sol";
+import {IFraxiversaryErrors} from "./interfaces/IFraxiversaryErrors.sol";
+import {IFraxiversaryEvents} from "./interfaces/IFraxiversaryEvents.sol";
 import {IERC6454} from "./interfaces/IERC6454.sol";
 import {IERC7590} from "./interfaces/IERC7590.sol";
 import {IERC4906} from "openzeppelin-contracts/contracts/interfaces/IERC4906.sol";
@@ -38,9 +38,9 @@ import {IOAppMsgInspector} from "@layerzerolabs/oapp-evm/contracts/oapp/interfac
 import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 
 /**
- * @title Fraxiversarry
+ * @title Fraxiversary
  * @author Frax Finance
- * @notice Fraxiversarry is a composable ERC721 that tokenizes ERC20 deposits and supports cross-chain movement
+ * @notice Fraxiversary is a composable ERC721 that tokenizes ERC20 deposits and supports cross-chain movement
  * @dev The contract supports BASE mints funded by approved Frax ERC20s, GIFT mints funded by WFRAX,
  *  SOULBOUND mints for curated distribution, and FUSED tokens created from four BASE tokens
  * @dev Minting for BASE and GIFT is time-boxed by mintingCutoffBlock which is calculated assuming Fraxtal 2s blocks
@@ -51,7 +51,7 @@ import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
  *  Sam Kazemian: https://github.com/samkazemian
  *  Bjirke (honorary mention for the original idea)
  */
-contract Fraxiversarry is
+contract Fraxiversary is
     ERC721,
     ERC721Enumerable,
     ERC721URIStorage,
@@ -59,8 +59,8 @@ contract Fraxiversarry is
     ERC721Burnable,
     IERC6454,
     IERC7590,
-    IFraxiversarryErrors,
-    IFraxiversarryEvents,
+    IFraxiversaryErrors,
+    IFraxiversaryEvents,
     ONFT721Core
 {
     using ONFT721MsgCodec for bytes;
@@ -94,18 +94,18 @@ contract Fraxiversarry is
     mapping(uint256 index => address erc20) public supportedErc20s;
 
     /// @notice Stores the underlying ERC20 asset addresses attached to each tokenId
-    /// @dev tokenId Fraxiversarry token ID that holds underlying assets
+    /// @dev tokenId Fraxiversary token ID that holds underlying assets
     /// @dev index Position of the underlying asset for the tokenId
     /// @dev assets ERC20 token address stored at a given index for the tokenId
     mapping(uint256 tokenId => address[] assets) public underlyingAssets;
 
     /// @notice Stores the outbound ERC20 transfer nonce for each tokenId
-    /// @dev tokenId Fraxiversarry token ID that holds underlying assets
+    /// @dev tokenId Fraxiversary token ID that holds underlying assets
     /// @dev transferOutNonce Number of successful ERC20 withdrawals triggered by burn
     mapping(uint256 tokenId => uint256 transferOutNonce) public transferOutNonces;
 
     /// @notice Stores the internal ERC20 balance credited to each tokenId per ERC20
-    /// @dev tokenId Fraxiversarry token ID that holds underlying assets
+    /// @dev tokenId Fraxiversary token ID that holds underlying assets
     /// @dev erc20 ERC20 token address for which the internal balance is tracked
     /// @dev balance Internal accounting balance for the ERC20 held by the tokenId
     mapping(uint256 tokenId => mapping(address erc20 => uint256 balance)) public erc20Balances;
@@ -117,12 +117,12 @@ contract Fraxiversarry is
     mapping(uint256 tokenId => mapping(uint256 index => uint256 underlyingTokenId)) public underlyingTokenIds;
 
     /// @notice Marks whether a tokenId is non-transferable under IERC6454 rules
-    /// @dev tokenId Fraxiversarry token ID to check
+    /// @dev tokenId Fraxiversary token ID to check
     /// @dev nonTransferable True if the token is soulbound
     mapping(uint256 tokenId => bool nonTransferable) public isNonTransferrable;
 
     /// @notice Stores the TokenType classification for each tokenId
-    /// @dev tokenId Fraxiversarry token ID to classify
+    /// @dev tokenId Fraxiversary token ID to classify
     /// @dev tokenType Current type for the tokenId
     mapping(uint256 tokenId => TokenType tokenType) public tokenTypes;
 
@@ -179,7 +179,7 @@ contract Fraxiversarry is
     string private premiumTokenUri;
 
     /**
-     * @notice Initializes Fraxiversarry with supply caps, fee settings, and ONFT configuration
+     * @notice Initializes Fraxiversary with supply caps, fee settings, and ONFT configuration
      * @dev The mintingCutoffBlock is calculated assuming a fixed 2 second Fraxtal block time
      * @dev nextGiftTokenId starts immediately after the BASE tokenId range
      * @dev nextPremiumTokenId starts immediately after the GIFT tokenId range
@@ -187,7 +187,7 @@ contract Fraxiversarry is
      * @param _lzEndpoint LayerZero endpoint used by ONFT721Core
      */
     constructor(address _initialOwner, address _lzEndpoint)
-        ERC721("Fraxiversarry", "FRAX5Y")
+        ERC721("Fraxiversary", "FRAX5Y")
         ONFT721Core(_lzEndpoint, _initialOwner)
     {
         mintingLimit = 12_000;

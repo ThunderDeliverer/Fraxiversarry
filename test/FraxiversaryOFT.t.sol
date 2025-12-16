@@ -3,8 +3,8 @@ pragma solidity ^0.8.30;
 
 import {Test, Vm} from "forge-std/Test.sol";
 
-import {Fraxiversarry} from "../src/Fraxiversarry.sol";
-import {IFraxiversarryErrors} from "../src/interfaces/IFraxiversarryErrors.sol";
+import {Fraxiversary} from "../src/Fraxiversary.sol";
+import {IFraxiversaryErrors} from "../src/interfaces/IFraxiversaryErrors.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 import {MockMsgInspector} from "./mocks/MockMsgInspector.sol";
 import {MockLzEndpoint} from "./mocks/MockLzEndpoint.sol";
@@ -41,12 +41,12 @@ contract NoopLzEndpoint {
 /// ONFT behaviour tests
 /// ----------------------------------------------------------
 
-contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
+contract FraxiversaryONFTTest is Test, IFraxiversaryErrors {
     using ONFT721MsgCodec for bytes;
     using ONFT721MsgCodec for bytes32;
 
-    FraxiversarryONFTHarness internal fraxiversarry; // source chain
-    FraxiversarryONFTHarness internal fraxDst; // destination chain
+    FraxiversaryONFTHarness internal fraxiversary; // source chain
+    FraxiversaryONFTHarness internal fraxDst; // destination chain
     ONFT721MsgCodecHarness internal codecHarness;
     MockLzEndpoint internal endpoint;
     MockMsgInspector internal inspector;
@@ -62,36 +62,36 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
         endpoint = new MockLzEndpoint();
 
         // Source-chain instance
-        fraxiversarry = new FraxiversarryONFTHarness(owner, address(endpoint));
+        fraxiversary = new FraxiversaryONFTHarness(owner, address(endpoint));
 
         // Destination-chain instance
-        fraxDst = new FraxiversarryONFTHarness(owner, address(endpoint));
+        fraxDst = new FraxiversaryONFTHarness(owner, address(endpoint));
 
         codecHarness = new ONFT721MsgCodecHarness();
 
         inspector = new MockMsgInspector();
-        fraxiversarry.exposedSetMsgInspector(address(inspector));
+        fraxiversary.exposedSetMsgInspector(address(inspector));
         fraxDst.exposedSetMsgInspector(address(inspector));
 
-        // Deploy wFRAX at canonical address and wire into *source* Fraxiversarry
-        address wFraxAddress = fraxiversarry.WFRAX_ADDRESS();
+        // Deploy wFRAX at canonical address and wire into *source* Fraxiversary
+        address wFraxAddress = fraxiversary.WFRAX_ADDRESS();
         MockERC20 tmp = new MockERC20("Wrapped FRAX", "wFRAX");
         vm.etch(wFraxAddress, address(tmp).code);
         wfrax = MockERC20(wFraxAddress);
 
-        fraxiversarry.setBaseAssetTokenUri(address(wfrax), "https://tba.fraxiversarry/wfrax.json");
+        fraxiversary.setBaseAssetTokenUri(address(wfrax), "https://tba.fraxiversary/wfrax.json");
 
         // Fund alice and set mint price on *source* chain
         wfrax.mint(alice, 1e22);
 
         vm.prank(owner);
-        fraxiversarry.updateBaseAssetMintPrice(address(wfrax), WFRAX_PRICE);
+        fraxiversary.updateBaseAssetMintPrice(address(wfrax), WFRAX_PRICE);
     }
 
     function _mintBase(address to) internal returns (uint256 tokenId) {
         vm.startPrank(to);
-        wfrax.approve(address(fraxiversarry), _total(WFRAX_PRICE));
-        tokenId = fraxiversarry.paidMint(address(wfrax));
+        wfrax.approve(address(fraxiversary), _total(WFRAX_PRICE));
+        tokenId = fraxiversary.paidMint(address(wfrax));
         vm.stopPrank();
     }
 
@@ -106,18 +106,18 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
     function testBridgeBurnForBaseBurnsTokenButPreservesBalances() public {
         uint256 tokenId = _mintBase(alice);
 
-        uint256 contractBalBefore = wfrax.balanceOf(address(fraxiversarry));
-        uint256 storedBalBefore = fraxiversarry.balanceOfERC20(address(wfrax), tokenId);
+        uint256 contractBalBefore = wfrax.balanceOf(address(fraxiversary));
+        uint256 storedBalBefore = fraxiversary.balanceOfERC20(address(wfrax), tokenId);
 
-        fraxiversarry.exposedBridgeBurn(alice, tokenId);
+        fraxiversary.exposedBridgeBurn(alice, tokenId);
 
         // Token should no longer exist
         vm.expectRevert();
-        fraxiversarry.ownerOf(tokenId);
+        fraxiversary.ownerOf(tokenId);
 
         // Underlying ERC20s must remain locked and accounted
-        uint256 contractBalAfter = wfrax.balanceOf(address(fraxiversarry));
-        uint256 storedBalAfter = fraxiversarry.balanceOfERC20(address(wfrax), tokenId);
+        uint256 contractBalAfter = wfrax.balanceOf(address(fraxiversary));
+        uint256 storedBalAfter = fraxiversary.balanceOfERC20(address(wfrax), tokenId);
 
         assertEq(contractBalAfter, contractBalBefore, "bridge burn must not move ERC20s");
         assertEq(storedBalAfter, storedBalBefore, "internal ERC20 balance must remain");
@@ -126,19 +126,19 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
     function testBridgeBurnForSoulboundDoesNotRevertAndBurnsToken() public {
         // Soulbound tokens should be bridgeable as well
         vm.prank(owner);
-        uint256 sbId = fraxiversarry.soulboundMint(alice, "uri");
+        uint256 sbId = fraxiversary.soulboundMint(alice, "uri");
 
         // pre: soulbound flag set
-        assertTrue(fraxiversarry.exposedIsNonTransferrable(sbId));
+        assertTrue(fraxiversary.exposedIsNonTransferrable(sbId));
 
-        fraxiversarry.exposedBridgeBurn(alice, sbId);
+        fraxiversary.exposedBridgeBurn(alice, sbId);
 
         vm.expectRevert();
-        fraxiversarry.ownerOf(sbId);
+        fraxiversary.ownerOf(sbId);
 
         // Soulbound flag can remain set; important part is that bridge burn
         // bypassed the normal soulbound transfer check.
-        assertTrue(fraxiversarry.exposedIsNonTransferrable(sbId));
+        assertTrue(fraxiversary.exposedIsNonTransferrable(sbId));
     }
 
     function testBridgeBurnWithWrongOwnerReverts() public {
@@ -146,7 +146,7 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
 
         // Pass a bogus "owner" to _bridgeBurn – ERC721 auth inside _update must reject it
         vm.expectRevert();
-        fraxiversarry.exposedBridgeBurn(bob, tokenId);
+        fraxiversary.exposedBridgeBurn(bob, tokenId);
     }
 
     // ------------------------------------------------------
@@ -158,17 +158,17 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
 
         // Debit (source chain) – mimic ONFT send, msg.sender == from
         vm.prank(alice);
-        fraxiversarry.exposedDebit(alice, tokenId, 2);
+        fraxiversary.exposedDebit(alice, tokenId, 2);
 
         // After debit, token should be burned locally
         vm.expectRevert();
-        fraxiversarry.ownerOf(tokenId);
+        fraxiversary.ownerOf(tokenId);
 
         // Credit (destination chain) – same tokenId comes back to alice
-        fraxiversarry.exposedCredit(alice, tokenId, 1);
+        fraxiversary.exposedCredit(alice, tokenId, 1);
 
         // After credit, token should exist again and be owned by alice
-        assertEq(fraxiversarry.ownerOf(tokenId), alice);
+        assertEq(fraxiversary.ownerOf(tokenId), alice);
     }
 
     function testDebitRevertsIfCallerNotOwnerOrApproved() public {
@@ -177,13 +177,13 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
         // Bob tries to debit without approval
         vm.prank(bob);
         vm.expectRevert(); // ERC721InsufficientApproval
-        fraxiversarry.exposedDebit(bob, tokenId, 2);
+        fraxiversary.exposedDebit(bob, tokenId, 2);
     }
 
     function testDebitRevertsForNonexistentToken() public {
         // tokenId 123 was never minted
         vm.expectRevert();
-        fraxiversarry.exposedDebit(alice, 123, 2);
+        fraxiversary.exposedDebit(alice, 123, 2);
     }
 
     function testCreditRevertsIfTokenAlreadyExists() public {
@@ -191,7 +191,7 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
 
         // Token exists locally, so credit for same id must revert with TokenAlreadyExists(tokenId)
         vm.expectRevert(abi.encodeWithSelector(TokenAlreadyExists.selector, tokenId));
-        fraxiversarry.exposedCredit(alice, tokenId, 1);
+        fraxiversary.exposedCredit(alice, tokenId, 1);
     }
 
     // ------------------------------------------------------
@@ -208,7 +208,7 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
         sp.extraOptions = abi.encode("my-options");
         sp.composeMsg = abi.encode("ignored-in-contract"); // contract builds its own compose payload
 
-        (bytes memory msgData, bytes memory opts) = fraxiversarry.exposedBuildMsgAndOptions(sp);
+        (bytes memory msgData, bytes memory opts) = fraxiversary.exposedBuildMsgAndOptions(sp);
 
         // Just basic invariants: call didn't revert and outputs are non-empty
         assertTrue(msgData.length > 0, "message must be non-empty");
@@ -224,22 +224,22 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
         sp.tokenId = tokenId;
 
         vm.expectRevert(InvalidReceiver.selector);
-        fraxiversarry.exposedBuildMsgAndOptions(sp);
+        fraxiversary.exposedBuildMsgAndOptions(sp);
     }
 
     // ------------------------------------------------------
     // _lzReceive success path – valid composed message
     //
     // IMPORTANT: we now generate the ONFT message by calling the contract's
-    // own _buildMsgAndOptions on the *source* Fraxiversarry and feed that
-    // into _lzReceive on the *destination* Fraxiversarry. This exactly
+    // own _buildMsgAndOptions on the *source* Fraxiversary and feed that
+    // into _lzReceive on the *destination* Fraxiversary. This exactly
     // mirrors the production flow (_buildMsgAndOptions → endpoint → _lzReceive).
     // ------------------------------------------------------
 
     function testLzReceiveWithValidComposedMessageMintsTokenToRecipient() public {
         // ----- SOURCE CHAIN SETUP -----
         uint256 tokenId = _mintBase(alice);
-        string memory uri = fraxiversarry.tokenURI(tokenId);
+        string memory uri = fraxiversary.tokenURI(tokenId);
         address recipientOnDst = bob;
 
         // Build ONFT message using the source contract's own builder
@@ -250,13 +250,13 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
         sp.extraOptions = bytes("");
         sp.composeMsg = bytes(""); // ignored in contract
 
-        (bytes memory msgData,) = fraxiversarry.exposedBuildMsgAndOptions(sp);
+        (bytes memory msgData,) = fraxiversary.exposedBuildMsgAndOptions(sp);
 
         // Source: bridge burn token from alice
         vm.prank(alice);
-        fraxiversarry.exposedDebit(alice, tokenId, sp.dstEid);
+        fraxiversary.exposedDebit(alice, tokenId, sp.dstEid);
         vm.expectRevert();
-        fraxiversarry.ownerOf(tokenId); // gone on source chain
+        fraxiversary.ownerOf(tokenId); // gone on source chain
 
         // ----- DESTINATION CHAIN RECEIVE -----
         Origin memory o = _origin(sp.dstEid);
@@ -290,9 +290,9 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
     function testBuildMsgAndOptionsEncodesSoulboundONFTPayload() public {
         // Mint soulbound token on source
         vm.prank(owner);
-        uint256 sbId = fraxiversarry.soulboundMint(alice, "https://sb.uri/1");
-        string memory uri = fraxiversarry.tokenURI(sbId);
-        assertTrue(fraxiversarry.exposedIsNonTransferrable(sbId));
+        uint256 sbId = fraxiversary.soulboundMint(alice, "https://sb.uri/1");
+        string memory uri = fraxiversary.tokenURI(sbId);
+        assertTrue(fraxiversary.exposedIsNonTransferrable(sbId));
 
         // Build send params
         SendParam memory sp;
@@ -302,7 +302,7 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
         sp.extraOptions = bytes("");
         sp.composeMsg = bytes(""); // ignored
 
-        (bytes memory msgData,) = fraxiversarry.exposedBuildMsgAndOptions(sp);
+        (bytes memory msgData,) = fraxiversary.exposedBuildMsgAndOptions(sp);
 
         // Decode ONFT wrapper via codec harness
         (address decodedTo, uint256 decodedId, bool hasCompose, bytes memory composeBlob) =
@@ -332,7 +332,7 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
     // ------------------------------------------------------
 
     function testLzReceiveWithoutInspectorRevertsOnBogusPayload() public {
-        fraxiversarry.exposedSetMsgInspector(address(0));
+        fraxiversary.exposedSetMsgInspector(address(0));
 
         Origin memory o = _origin(1);
         bytes32 guid = keccak256("guid-no-inspector");
@@ -340,7 +340,7 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
         bytes memory opts = abi.encode("opts");
 
         vm.expectRevert();
-        fraxiversarry.exposedLzReceive(o, guid, payload, address(this), opts);
+        fraxiversary.exposedLzReceive(o, guid, payload, address(this), opts);
     }
 
     function testLzReceiveRevertsWhenMessageIsNotComposedRawCodec() public {
@@ -358,7 +358,7 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
         bytes32 guid = keccak256("guid-missing-compose");
 
         vm.expectRevert(MissingComposedMessage.selector);
-        fraxiversarry.exposedLzReceive(o, guid, message, address(this), "");
+        fraxiversary.exposedLzReceive(o, guid, message, address(this), "");
     }
 
     function testLzReceiveRevertsWhenMessageIsNotComposedAfterDebit() public {
@@ -373,7 +373,7 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
 
         // Simulate debit on source chain
         vm.prank(alice);
-        fraxiversarry.exposedDebit(alice, tokenId, 10);
+        fraxiversary.exposedDebit(alice, tokenId, 10);
 
         Origin memory o = _origin(10);
         bytes32 guid = keccak256("lzReceiveRevertsNotComposed");
@@ -387,14 +387,14 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
         address recipientOnDst = bob;
 
         // Start with a valid inner payload, then truncate it to break abi.decode
-        bytes memory inner = abi.encode("https://fraxiversarry.test/bad.json", true);
+        bytes memory inner = abi.encode("https://fraxiversary.test/bad.json", true);
         // remove last 32 bytes (the bool) to make it invalid
         bytes memory truncated = new bytes(inner.length - 32);
         for (uint256 i; i < truncated.length; ++i) {
             truncated[i] = inner[i];
         }
 
-        bytes32 fromOApp = bytes32(uint256(uint160(address(fraxiversarry))));
+        bytes32 fromOApp = bytes32(uint256(uint160(address(fraxiversary))));
         bytes memory composeBlob = abi.encodePacked(fromOApp, truncated);
 
         bytes32 to = bytes32(uint256(uint160(recipientOnDst)));
@@ -409,7 +409,7 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
 
     function testBuildMsgAndOptionsEncodesCorrectONFTPayload() public {
         uint256 tokenId = _mintBase(alice);
-        string memory uri = fraxiversarry.tokenURI(tokenId);
+        string memory uri = fraxiversary.tokenURI(tokenId);
 
         // Build send params in memory (fine for tests)
         SendParam memory sp;
@@ -419,7 +419,7 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
         sp.extraOptions = bytes("");
         sp.composeMsg = bytes(""); // ignored by contract
 
-        (bytes memory msgData,) = fraxiversarry.exposedBuildMsgAndOptions(sp);
+        (bytes memory msgData,) = fraxiversary.exposedBuildMsgAndOptions(sp);
 
         // Decode with ONFT721MsgCodec via the harness
         (address decodedTo, uint256 decodedId, bool hasCompose, bytes memory composeBlob) =
@@ -450,8 +450,8 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
 
     function testBuildMsgAndOptionsRevertsWhenSoulboundToDifferentRecipient() public {
         vm.prank(owner);
-        uint256 sbId = fraxiversarry.soulboundMint(alice, "uri");
-        assertTrue(fraxiversarry.exposedIsNonTransferrable(sbId));
+        uint256 sbId = fraxiversary.soulboundMint(alice, "uri");
+        assertTrue(fraxiversary.exposedIsNonTransferrable(sbId));
 
         SendParam memory sp;
         sp.dstEid = 10;
@@ -459,12 +459,12 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
         sp.tokenId = sbId;
 
         vm.expectRevert(CannotTransferSoulboundToken.selector);
-        fraxiversarry.exposedBuildMsgAndOptions(sp);
+        fraxiversary.exposedBuildMsgAndOptions(sp);
     }
 
     // **** Helpers ****
     function _fee(uint256 amount) internal view returns (uint256) {
-        return (amount * fraxiversarry.mintingFeeBasisPoints()) / fraxiversarry.MAX_BASIS_POINTS();
+        return (amount * fraxiversary.mintingFeeBasisPoints()) / fraxiversary.MAX_BASIS_POINTS();
     }
 
     function _total(uint256 amount) internal view returns (uint256) {
@@ -476,8 +476,8 @@ contract FraxiversarryONFTTest is Test, IFraxiversarryErrors {
 /// ONFT harness – exposes internal ONFT helpers
 /// ----------------------------------------------------------
 
-contract FraxiversarryONFTHarness is Fraxiversarry {
-    constructor(address initialOwner, address lzEndpoint) Fraxiversarry(initialOwner, lzEndpoint) {}
+contract FraxiversaryONFTHarness is Fraxiversary {
+    constructor(address initialOwner, address lzEndpoint) Fraxiversary(initialOwner, lzEndpoint) {}
 
     function exposedIncreaseBalance(address account, uint128 value) external {
         _increaseBalance(account, value);

@@ -1,10 +1,10 @@
-# Fraxiversarry
+# Fraxiversary
 
 A composable, ERC20-backed, cross-chain ERC721 collection for the Frax ecosystem intended to commemorate the 5th anniversary of Frax Finance.
 
 ## High-level overview
 
-Fraxiversarry is an ERC721-based collection with four core behaviors:
+Fraxiversary is an ERC721-based collection with four core behaviors:
 
 1. **BASE minting**
    - Users mint NFTs by paying with an allowlisted Frax ERC20.
@@ -54,8 +54,8 @@ flowchart TB
     O[Owner / Admin]
   end
 
-  subgraph Fraxiversarry_Contract
-    C["Fraxiversarry
+  subgraph Fraxiversary_Contract
+    C["Fraxiversary
 ERC721 + Enumerable + Pausable + Burnable
 IERC6454 + IERC7590 + ONFT721Core"]
   end
@@ -68,7 +68,7 @@ IERC6454 + IERC7590 + ONFT721Core"]
   subgraph LayerZero
     LZ[Endpoint + ONFT721 libraries]
     D["Destination Chain
-Fraxiversarry instance"]
+Fraxiversary instance"]
   end
 
   U1 -->|paidMint| C
@@ -175,7 +175,7 @@ stateDiagram-v2
 
 ## ERC20 tokenization model (IERC7590-like semantics)
 
-Fraxiversarry tracks ERC20 deposits using internal accounting:
+Fraxiversary tracks ERC20 deposits using internal accounting:
 
 - `erc20Balances[tokenId][erc20]`
 - `underlyingAssets[tokenId][index]`
@@ -203,7 +203,7 @@ Fraxiversarry tracks ERC20 deposits using internal accounting:
 ```mermaid
 flowchart LR
   U[User] -->|approve| ERC20[ERC20]
-  U -->|mint| C[Fraxiversarry]
+  U -->|mint| C[Fraxiversary]
   C -->|transferFrom amount + fee| ERC20
   C -->|credit amount to tokenId| BAL[erc20Balances]
   C -->|record fee| FEES[collectedFees]
@@ -252,7 +252,7 @@ Owner-only.
 ```mermaid
 sequenceDiagram
   participant U as User
-  participant C as Fraxiversarry
+  participant C as Fraxiversary
 
   U->>C: fuseTokens(t1,t2,t3,t4)
   C->>C: verify ownership of all 4
@@ -269,7 +269,7 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
   participant U as User
-  participant C as Fraxiversarry
+  participant C as Fraxiversary
 
   U->>C: unfuseTokens(premiumTokenId)
   C->>C: verify owner
@@ -313,7 +313,7 @@ flowchart TB
 
 ## Cross-chain behavior (LayerZero ONFT721)
 
-Fraxiversarry extends `ONFT721Core`.
+Fraxiversary extends `ONFT721Core`.
 
 ### Outbound (source chain)
 - `_debit(from, tokenId, ...)`
@@ -334,9 +334,9 @@ Fraxiversarry extends `ONFT721Core`.
 
 ```mermaid
 sequenceDiagram
-  participant S as Source Fraxiversarry
+  participant S as Source Fraxiversary
   participant LZ as LayerZero Endpoint
-  participant D as Destination Fraxiversarry
+  participant D as Destination Fraxiversary
 
   Note over S: User initiates send
   S->>S: _buildMsgAndOptions\n(encodes tokenUri + soulbound flag)

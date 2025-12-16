@@ -10,9 +10,9 @@ pragma solidity ^0.8.30;
  * | /_/   /_/   \__,_/_/|_|  /_/   /_/_/ /_/\__,_/_/ /_/\___/\___/   |
  * |                                                                  |
  * ====================================================================
- * ========================= Fraxiversarry ============================
+ * ========================= Fraxiversary ============================
  * ====================================================================
- * Fraxiversarry NFT contract for the 5th anniversary of Frax Finance
+ * Fraxiversary NFT contract for the 5th anniversary of Frax Finance
  * Frax Finance: https://github.com/FraxFinance
  */
 
@@ -21,7 +21,7 @@ import {ERC721Enumerable} from "openzeppelin-contracts/contracts/token/ERC721/ex
 import {ERC721Pausable} from "openzeppelin-contracts/contracts/token/ERC721/extensions/ERC721Pausable.sol";
 import {ERC721URIStorage} from "openzeppelin-contracts/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 
-import {IFraxiversarryErrors} from "./interfaces/IFraxiversarryErrors.sol";
+import {IFraxiversaryErrors} from "./interfaces/IFraxiversaryErrors.sol";
 import {IERC6454} from "./interfaces/IERC6454.sol";
 import {IERC4906} from "openzeppelin-contracts/contracts/interfaces/IERC4906.sol";
 
@@ -33,29 +33,29 @@ import {IOAppMsgInspector} from "@layerzerolabs/oapp-evm/contracts/oapp/interfac
 import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 
 /**
- * @title Fraxiversarry
+ * @title Fraxiversary
  * @author Frax Finance
- * @notice Fraxiversarry Ethereum mirror smart contract to support cross-chain movement
+ * @notice Fraxiversary Ethereum mirror smart contract to support cross-chain movement
  * @dev Soulbound restrictions are enforced via _update with a bridge-aware bypass used during ONFT operations
  * @dev Frax Reviewer(s) / Contributor(s)
  *  Jan Turk: https://github.com/ThunderDeliverer
  *  Sam Kazemian: https://github.com/samkazemian
  *  Bjirke (honorary mention for the original idea)
  */
-contract Fraxiversarry is
+contract Fraxiversary is
     ERC721,
     ERC721Enumerable,
     ERC721URIStorage,
     ERC721Pausable,
     IERC6454,
-    IFraxiversarryErrors,
+    IFraxiversaryErrors,
     ONFT721Core
 {
     using ONFT721MsgCodec for bytes;
     using ONFT721MsgCodec for bytes32;
 
     /// @notice Marks whether a tokenId is non-transferable under IERC6454 rules
-    /// @dev tokenId Fraxiversarry token ID to check
+    /// @dev tokenId Fraxiversary token ID to check
     /// @dev nonTransferable True if the token is soulbound
     mapping(uint256 tokenId => bool nonTransferable) public isNonTransferrable;
 
@@ -63,7 +63,7 @@ contract Fraxiversarry is
     bool private _isBridgeOperation;
 
     /**
-     * @notice Initializes Fraxiversarry with supply caps, fee settings, and ONFT configuration
+     * @notice Initializes Fraxiversary with supply caps, fee settings, and ONFT configuration
      * @dev The mintingCutoffBlock is calculated assuming a fixed 2 second Fraxtal block time
      * @dev nextGiftTokenId starts immediately after the BASE tokenId range
      * @dev nextPremiumTokenId starts immediately after the GIFT tokenId range
@@ -71,7 +71,7 @@ contract Fraxiversarry is
      * @param _lzEndpoint LayerZero endpoint used by ONFT721Core
      */
     constructor(address _initialOwner, address _lzEndpoint)
-        ERC721("Fraxiversarry", "FRAX5Y")
+        ERC721("Fraxiversary", "FRAX5Y")
         ONFT721Core(_lzEndpoint, _initialOwner)
     {}
 
