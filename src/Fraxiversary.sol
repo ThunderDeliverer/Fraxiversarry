@@ -1080,13 +1080,6 @@ contract Fraxiversary is
         _setTokenURI(tokenId, tokenUri);
         isNonTransferrable[tokenId] = isSoulbound;
 
-        bytes32 composeFrom = ONFTComposeMsgCodec.addressToBytes32(address(this));
-        bytes memory composeInnerMsg = abi.encode(tokenUri, isSoulbound);
-        bytes memory composeMsg = abi.encodePacked(composeFrom, composeInnerMsg);
-
-        bytes memory composedMsgEncoded = ONFTComposeMsgCodec.encode(_origin.nonce, _origin.srcEid, composeMsg);
-        endpoint.sendCompose(toAddress, _guid, 0, composedMsgEncoded);
-
         emit ONFTReceived(_guid, _origin.srcEid, toAddress, tokenId);
     }
 
