@@ -26,7 +26,12 @@ import {IERC6454} from "./interfaces/IERC6454.sol";
 import {IERC4906} from "openzeppelin-contracts/contracts/interfaces/IERC4906.sol";
 
 import {ONFT721Core} from "@layerzerolabs/onft-evm/contracts/onft721/ONFT721Core.sol";
-import {IONFT721, SendParam} from "@layerzerolabs/onft-evm/contracts/onft721/interfaces/IONFT721.sol";
+import {
+    IONFT721,
+    MessagingFee,
+    MessagingReceipt,
+    SendParam
+} from "@layerzerolabs/onft-evm/contracts/onft721/interfaces/IONFT721.sol";
 import {ONFT721MsgCodec} from "@layerzerolabs/onft-evm/contracts/onft721/libs/ONFT721MsgCodec.sol";
 import {ONFTComposeMsgCodec} from "@layerzerolabs/onft-evm/contracts/libs/ONFTComposeMsgCodec.sol";
 import {IOAppMsgInspector} from "@layerzerolabs/oapp-evm/contracts/oapp/interfaces/IOAppMsgInspector.sol";
@@ -144,6 +149,30 @@ contract Fraxiversary is
      */
     function approvalRequired() public view override returns (bool) {
         return false;
+    }
+
+    /**
+     * @notice Sends a tokenId to a destination chain via LayerZero ONFT bridging
+     * @dev This override only builds the message options before calling _debit, so it is operatonally identical to the
+     *  original one
+     * @param _sendParam Parameters for the ONFT bridging
+     * @param _fee Fee that the bridge is expected to cost in wei
+     * @param _refundAddress Address to refund the excess fee to
+     * @return msgReceipt MessagingReceipt containing details of the bridging operation
+     */
+    function send(SendParam calldata _sendParam, MessagingFee calldata _fee, address _refundAddress)
+        external
+        payable
+        override
+        returns (MessagingReceipt memory msgReceipt)
+    {
+        (bytes memory message, bytes memory options) = _buildMsgAndOptions(_sendParam);
+
+        _debit(msg.sender, _sendParam.tokenId, _sendParam.dstEid);
+
+        // @dev Sends the message to the LayerZero Endpoint, returning the MessagingReceipt.
+        msgReceipt = _lzSend(_sendParam.dstEid, message, options, _fee, _refundAddress);
+        emit ONFTSent(msgReceipt.guid, _sendParam.dstEid, msg.sender, _sendParam.tokenId);
     }
 
     // ********** Internal functions to facilitate the ERC6454 functionality **********
