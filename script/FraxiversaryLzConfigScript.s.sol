@@ -12,7 +12,7 @@ interface IOAppCore {
 interface IOAppOptionsType3 {
     struct EnforcedOptionParam {
         uint32 eid;
-        uint32 msgType;
+        uint16 msgType;
         bytes options;
     }
 
@@ -20,6 +20,12 @@ interface IOAppOptionsType3 {
 }
 
 interface IMessageLibManager {
+    struct SetConfigParam {
+        uint32 _eid;
+        uint32 _configType;
+        bytes _config;
+    }
+
     function isSupportedEid(uint32 _eid) external view returns (bool);
 
     function getSendLibrary(address _sender, uint32 _eid) external view returns (address lib_);
@@ -37,7 +43,7 @@ interface IMessageLibManager {
         view
         returns (bytes memory);
 
-    function setConfig(address _oapp, address _lib, uint32 _eid, uint32 _configType, bytes calldata _config) external;
+    function setConfig(address _oapp, address _lib, SetConfigParam[] calldata _params) external;
 }
 
 contract FraxiversaryLzConfigScript is Script {
@@ -52,8 +58,8 @@ contract FraxiversaryLzConfigScript is Script {
     uint32 constant EID_ETHEREUM = 30101;
     uint32 constant EID_FRAXTAL = 30255;
 
-    address constant FRAXIversary_ETHEREUM = address(0); // TODO
-    address constant FRAXIversary_FRAXTAL = address(0); // TODO
+    address constant FRAXIVERSARY_ETHEREUM = 0x49498c779933941747884FF25b494444a44f0AA2;
+    address constant FRAXIVERSARY_FRAXTAL = 0x2Ee68dE9e4FD0F35409a00bA46953782b5491250;
 
     address constant SEND_LIB_302_ETHEREUM = 0xbB2Ea70C9E858123480642Cf96acbcCE1372dCe1;
     address constant RECEIVE_LIB_302_ETHEREUM = 0xc02Ab410f0734EFa3F14628780e6e695156024C2;
@@ -66,8 +72,13 @@ contract FraxiversaryLzConfigScript is Script {
     address constant TEMPLATE_OFT_ETHEREUM = 0xCAcd6fd266aF91b8AeD52aCCc382b4e165586E29; //frxUSD
     address constant TEMPLATE_OFT_FRAXTAL = 0x96A394058E2b84A89bac9667B19661Ed003cF5D4; //frxUSD
 
+    address internal deployer;
+    uint256 internal privateKey;
+
     function run() public {
-        vm.startBroadcast();
+        privateKey = vm.envUint("PK");
+        deployer = vm.rememberKey(privateKey);
+        vm.startBroadcast(deployer);
 
         if (block.chainid == CHAINID_ETHEREUM) {
             _configureEthereumSide();
@@ -83,10 +94,10 @@ contract FraxiversaryLzConfigScript is Script {
     function _configureEthereumSide() internal {
         console.log("Configuring Ethereum connections...");
 
-        address localOnft = FRAXIversary_ETHEREUM;
+        address localOnft = FRAXIVERSARY_ETHEREUM;
         address endpoint = ENDPOINT_ETHEREUM;
         uint32 remoteEid = EID_FRAXTAL;
-        address remoteOnft = FRAXIversary_FRAXTAL;
+        address remoteOnft = FRAXIVERSARY_FRAXTAL;
         address sendLib302 = SEND_LIB_302_ETHEREUM;
         address recvLib302 = RECEIVE_LIB_302_ETHEREUM;
         address templateOapp = TEMPLATE_OFT_ETHEREUM;
@@ -97,10 +108,10 @@ contract FraxiversaryLzConfigScript is Script {
     function _configureFraxtalSide() internal {
         console.log("Configuring Fraxtal connections...");
 
-        address localOnft = FRAXIversary_FRAXTAL;
+        address localOnft = FRAXIVERSARY_FRAXTAL;
         address endpoint = ENDPOINT_FRAXTAL;
         uint32 remoteEid = EID_ETHEREUM;
-        address remoteOnft = FRAXIversary_ETHEREUM;
+        address remoteOnft = FRAXIVERSARY_ETHEREUM;
         address sendLib302 = SEND_LIB_302_FRAXTAL;
         address recvLib302 = RECEIVE_LIB_302_FRAXTAL;
         address templateOapp = TEMPLATE_OFT_FRAXTAL;
@@ -219,7 +230,11 @@ contract FraxiversaryLzConfigScript is Script {
         bytes memory ulnConfig = _msgLibMgr.getConfig(_templateOapp, templateSendLib, _remoteEid, CONFIG_TYPE_ULN);
         require(ulnConfig.length != 0, "No ULN config in template");
 
-        _msgLibMgr.setConfig(_localOnft, localSendLib, _remoteEid, CONFIG_TYPE_ULN, ulnConfig);
+        IMessageLibManager.SetConfigParam[] memory params = new IMessageLibManager.SetConfigParam[](1);
+        params[0] =
+            IMessageLibManager.SetConfigParam({_eid: _remoteEid, _configType: CONFIG_TYPE_ULN, _config: ulnConfig});
+
+        _msgLibMgr.setConfig(_localOnft, localSendLib, params);
 
         console.log("Copied ULN config from template OApp to local ONFT");
     }

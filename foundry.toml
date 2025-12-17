@@ -8,3 +8,6 @@ solc = "0.8.30"
 optimizer = true
 optimizer_runs = 800
 via_ir = true
+
+[rpc_endpoints]
+frax_mainnet = "https://rpc.frax.com"

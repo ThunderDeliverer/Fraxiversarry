@@ -8,6 +8,7 @@ out/
 /broadcast/**/dry-run/
 report/
 lcov.info
+broadcast/
 
 # Docs
 docs/
