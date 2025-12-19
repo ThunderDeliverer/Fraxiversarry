@@ -58,8 +58,8 @@ contract FraxiversaryLzConfigScript is Script {
     uint32 constant EID_ETHEREUM = 30101;
     uint32 constant EID_FRAXTAL = 30255;
 
-    address constant FRAXIVERSARY_ETHEREUM = 0x49498c779933941747884FF25b494444a44f0AA2;
-    address constant FRAXIVERSARY_FRAXTAL = 0x2Ee68dE9e4FD0F35409a00bA46953782b5491250;
+    address constant FRAXIVERSARY_ETHEREUM = 0x1DBD89bf5fC0b9082439f2bC35b85c02fBD83092;
+    address constant FRAXIVERSARY_FRAXTAL = 0x31e0Ed13B47e77132C32d599314212b325929BcE;
 
     address constant SEND_LIB_302_ETHEREUM = 0xbB2Ea70C9E858123480642Cf96acbcCE1372dCe1;
     address constant RECEIVE_LIB_302_ETHEREUM = 0xc02Ab410f0734EFa3F14628780e6e695156024C2;
@@ -69,7 +69,7 @@ contract FraxiversaryLzConfigScript is Script {
 
     uint32 constant CONFIG_TYPE_ULN = 2;
 
-    address constant TEMPLATE_OFT_ETHEREUM = 0xCAcd6fd266aF91b8AeD52aCCc382b4e165586E29; //frxUSD
+    address constant TEMPLATE_OFT_ETHEREUM = 0x566a6442A5A6e9895B9dCA97cC7879D632c6e4B0; //frxUSD
     address constant TEMPLATE_OFT_FRAXTAL = 0x96A394058E2b84A89bac9667B19661Ed003cF5D4; //frxUSD
 
     address internal deployer;

@@ -6,7 +6,7 @@ import {Fraxiversary} from "../src/Fraxiversary.sol";
 
 contract FraxiversaryMintConfigScript is Script {
     Fraxiversary public fraxiversary;
-    address constant FRAXIVERSARY = 0x2Ee68dE9e4FD0F35409a00bA46953782b5491250;
+    address constant FRAXIVERSARY = 0x31e0Ed13B47e77132C32d599314212b325929BcE;
     address internal deployer;
     uint256 internal privateKey;
 
